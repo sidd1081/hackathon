@@ -1,0 +1,24 @@
+# Backend foundation dependencies (Stage 1).
+# RAG / LangGraph / LangChain / Groq dependencies are intentionally NOT here yet;
+# they will be added in later stages so the environment stays lean and fast.
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+pydantic-settings>=2.3
+
+# Data validation / preprocessing (Stage 2)
+pandas>=2.2
+
+# Embeddings (Stage 5) - local, via Sentence Transformers (not Groq)
+sentence-transformers>=3.0
+
+# Vector store (Stage 6) - FAISS IndexFlatIP (cosine via normalized IP)
+faiss-cpu>=1.8
+
+# LLM layer (Stage 9) - Groq via LangChain (LLM only, never embeddings)
+langchain>=0.3
+langchain-groq>=0.2
+
+# API: LangGraph workflow + file uploads (Stages 10-12)
+langgraph>=0.2
+python-multipart>=0.0.9

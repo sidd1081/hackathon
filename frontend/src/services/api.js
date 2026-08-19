@@ -1,0 +1,79 @@
+// All backend communication lives here. The frontend never holds the Groq key —
+// analysis happens server-side; this module only calls the backend HTTP API.
+
+// Backend base URL is configured via the VITE_API_BASE_URL environment
+// variable. Empty (default) means "use the Vite dev proxy" (same-origin /api).
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+
+/**
+ * Turn a backend error payload into a readable message.
+ * The backend returns `detail` as either a string, a Pydantic 422 array, or a
+ * `{ message, errors[] }` object (dataset validation).
+ */
+function extractErrorMessage(payload, status) {
+  if (payload && typeof payload === "object") {
+    const detail = "detail" in payload ? payload.detail : payload;
+
+    if (typeof detail === "string") return detail;
+
+    if (Array.isArray(detail)) {
+      const msgs = detail
+        .map((e) => (e && e.msg ? e.msg : null))
+        .filter(Boolean);
+      if (msgs.length) return msgs.join("; ");
+    }
+
+    if (detail && typeof detail === "object") {
+      const errors = Array.isArray(detail.errors) ? detail.errors : [];
+      if (detail.message) {
+        return errors.length
+          ? `${detail.message} ${errors.join("; ")}`
+          : detail.message;
+      }
+      if (errors.length) return errors.join("; ");
+    }
+  }
+  return `Request failed (HTTP ${status}).`;
+}
+
+async function request(path, options = {}) {
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, options);
+  } catch {
+    throw new Error(
+      "Could not reach the server. Is the backend running on the expected port?",
+    );
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  const payload = contentType.includes("application/json")
+    ? await response.json().catch(() => null)
+    : await response.text().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(payload, response.status));
+  }
+  return payload;
+}
+
+/** POST /api/incidents/analyze */
+export function analyzeIncident(description) {
+  return request("/api/incidents/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ description }),
+  });
+}
+
+/** POST /api/dataset/upload (multipart) */
+export function uploadDataset(file) {
+  const form = new FormData();
+  form.append("file", file);
+  return request("/api/dataset/upload", { method: "POST", body: form });
+}
+
+/** GET /api/health */
+export function getHealth() {
+  return request("/api/health", { method: "GET" });
+}
