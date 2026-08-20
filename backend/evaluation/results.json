@@ -1,273 +1,237 @@
 {
-  "generated_at": "2026-08-19T19:17:34.634198+00:00",
+  "generated_at": "2026-08-20T14:28:09.839418+00:00",
   "config": {
     "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
     "groq_model": "openai/gpt-oss-120b",
     "fetch_k": 10,
     "top_k": 5,
-    "num_cases": 8,
+    "num_cases": 9,
     "correctness_threshold": 0.55
   },
   "retrieval": {
-    "num_scored_queries": 7,
-    "recall_at_5": 0.9286,
-    "precision_at_5": 0.2,
-    "mrr": 1.0
+    "num_scored_queries": 8,
+    "recall_at_5": 0.875,
+    "precision_at_5": 0.175,
+    "mrr": 0.875
   },
   "rca": {
-    "root_cause_correctness": 1.0,
-    "mean_root_cause_alignment": 0.8817,
-    "resolution_relevance_mean": 0.5622,
+    "root_cause_correctness": 0.6667,
+    "mean_root_cause_alignment": 0.608,
+    "resolution_relevance_mean": 0.514,
     "evidence_support_rate": 1.0,
     "hallucination_rate": 0.0,
     "abstention_correct_rate": 1.0
   },
   "performance_ms": {
     "embedding": {
-      "mean": 38.14,
-      "median": 13.19,
-      "min": 8.0,
-      "max": 88.49,
-      "n": 8
+      "mean": 73.95,
+      "median": 52.84,
+      "min": 19.09,
+      "max": 184.84,
+      "n": 9
     },
     "retrieval": {
-      "mean": 19.01,
-      "median": 13.47,
-      "min": 10.22,
-      "max": 56.21,
-      "n": 8
+      "mean": 53.99,
+      "median": 36.16,
+      "min": 16.7,
+      "max": 141.19,
+      "n": 9
     },
     "total_rca": {
-      "mean": 8283.81,
-      "median": 7219.39,
-      "min": 16.2,
-      "max": 18999.89,
-      "n": 8
+      "mean": 12024.74,
+      "median": 16089.86,
+      "min": 27.93,
+      "max": 24328.9,
+      "n": 9
     }
   },
   "cases": [
     {
-      "id": "connector-restart-npe",
-      "query": "Restarting a connector that has no running tasks returns an empty HTTP response and the Connect REST client crashes with a NullPointerException.",
+      "id": "kafka-keyvalueiterator-leak",
+      "query": "A Kafka Streams application leaks resources because KeyValueIterator objects returned from state store queries are never closed after they are used.",
       "relevant_ids": [
-        "KAFKA-13139"
+        "KAFKA-13122"
       ],
-      "reference_id": "KAFKA-13139",
+      "reference_id": "KAFKA-13122",
       "retrieved_top5": [
-        "KAFKA-13139",
-        "KAFKA-12726",
-        "KAFKA-12730",
-        "KAFKA-10792",
-        "KAFKA-10209"
+        "KAFKA-13122",
+        "KAFKA-10616",
+        "KAFKA-10722",
+        "KAFKA-9073",
+        "KAFKA-10638"
       ],
       "recall_at_5": 1.0,
       "precision_at_5": 0.2,
       "reciprocal_rank": 1.0,
       "expected": "documented",
       "generated_root_cause_is_sentinel": false,
-      "root_cause_alignment": 0.8283,
+      "root_cause_alignment": 0.6562,
       "root_cause_correct": true,
-      "resolution_relevance": 0.3646,
+      "resolution_relevance": 0.568,
       "supporting_ticket_ids": [
-        "KAFKA-13139"
+        "KAFKA-13122"
       ],
       "evidence_support": true,
       "hallucination_flag": false,
       "confidence": "high",
       "status": "generated",
       "latency_ms": {
-        "embedding": 88.49,
-        "retrieval": 10.22,
-        "total_rca": 1709.69
+        "embedding": 166.31,
+        "retrieval": 141.19,
+        "total_rca": 1965.36
       }
     },
     {
-      "id": "rebalance-loop",
-      "query": "Our consumer group is stuck continuously rebalancing and never stabilizes, so consumers make no progress.",
+      "id": "flink-entrypoint-shutdown-lock",
+      "query": "A Flink cluster entrypoint fails to shut down after an uncaught exception because a thread join call keeps holding the shutdown lock, so the process hangs instead of exiting.",
       "relevant_ids": [
-        "KAFKA-12890",
-        "KAFKA-12896"
+        "FLINK-23406"
       ],
-      "reference_id": "KAFKA-12890",
+      "reference_id": "FLINK-23406",
       "retrieved_top5": [
-        "KAFKA-12890",
-        "KAFKA-12984",
-        "KAFKA-10870",
-        "KAFKA-12455",
-        "KAFKA-10793"
+        "FLINK-21274",
+        "FLINK-22820",
+        "FLINK-21028",
+        "FLINK-20284",
+        "FLINK-22496"
       ],
-      "recall_at_5": 0.5,
+      "recall_at_5": 0.0,
+      "precision_at_5": 0.0,
+      "reciprocal_rank": 0.0,
+      "expected": "documented",
+      "generated_root_cause_is_sentinel": true,
+      "root_cause_alignment": 0.0,
+      "root_cause_correct": false,
+      "resolution_relevance": null,
+      "supporting_ticket_ids": [],
+      "evidence_support": true,
+      "hallucination_flag": false,
+      "confidence": "low",
+      "status": "generated",
+      "latency_ms": {
+        "embedding": 25.39,
+        "retrieval": 36.16,
+        "total_rca": 1516.62
+      }
+    },
+    {
+      "id": "spark-yarnclustersuite-noclassdef",
+      "query": "Running the Spark YarnClusterSuite integration tests throws NoClassDefFoundError unless the hadoop-3.2 build profile is explicitly activated.",
+      "relevant_ids": [
+        "SPARK-36067"
+      ],
+      "reference_id": "SPARK-36067",
+      "retrieved_top5": [
+        "SPARK-36067",
+        "HADOOP-14298",
+        "SPARK-33104",
+        "SPARK-34480",
+        "SPARK-33343"
+      ],
+      "recall_at_5": 1.0,
       "precision_at_5": 0.2,
       "reciprocal_rank": 1.0,
       "expected": "documented",
       "generated_root_cause_is_sentinel": false,
-      "root_cause_alignment": 0.9913,
+      "root_cause_alignment": 0.9354,
       "root_cause_correct": true,
-      "resolution_relevance": 0.5878,
+      "resolution_relevance": 0.2487,
       "supporting_ticket_ids": [
-        "KAFKA-12890"
+        "SPARK-36067"
+      ],
+      "evidence_support": true,
+      "hallucination_flag": false,
+      "confidence": "high",
+      "status": "generated",
+      "latency_ms": {
+        "embedding": 71.93,
+        "retrieval": 53.04,
+        "total_rca": 2148.02
+      }
+    },
+    {
+      "id": "hbase-bufferedmutator-executor-leak",
+      "query": "Repeatedly calling Connection.getBufferedMutator for a table leaks thread pool executors and never releases them.",
+      "relevant_ids": [
+        "HBASE-26088"
+      ],
+      "reference_id": "HBASE-26088",
+      "retrieved_top5": [
+        "HBASE-26088",
+        "CASSANDRA-15726",
+        "HBASE-22963",
+        "HBASE-21775",
+        "SPARK-35391"
+      ],
+      "recall_at_5": 1.0,
+      "precision_at_5": 0.2,
+      "reciprocal_rank": 1.0,
+      "expected": "documented",
+      "generated_root_cause_is_sentinel": false,
+      "root_cause_alignment": 0.4725,
+      "root_cause_correct": false,
+      "resolution_relevance": 0.6313,
+      "supporting_ticket_ids": [
+        "HBASE-26088"
       ],
       "evidence_support": true,
       "hallucination_flag": false,
       "confidence": "medium",
       "status": "generated",
       "latency_ms": {
-        "embedding": 9.51,
-        "retrieval": 12.77,
-        "total_rca": 1686.1
+        "embedding": 44.73,
+        "retrieval": 16.7,
+        "total_rca": 21621.9
       }
     },
     {
-      "id": "streams-state-restore-loop",
-      "query": "A Kafka Streams application gets stuck in an endless loop while restoring a global table state store after startup.",
+      "id": "cassandra-pending-ranges-shutdown-peer",
+      "query": "When a moving node crashes hard during a range movement, stale pending ranges remain for the shutdown peer and block a subsequent node replacement.",
       "relevant_ids": [
-        "KAFKA-12951"
+        "CASSANDRA-16796"
       ],
-      "reference_id": "KAFKA-12951",
+      "reference_id": "CASSANDRA-16796",
       "retrieved_top5": [
-        "KAFKA-12951",
-        "KAFKA-10454",
-        "KAFKA-10638",
-        "KAFKA-12780",
-        "KAFKA-10616"
+        "CASSANDRA-16796",
+        "KAFKA-9051",
+        "HBASE-22538",
+        "CASSANDRA-16638",
+        "HBASE-24117"
       ],
       "recall_at_5": 1.0,
       "precision_at_5": 0.2,
       "reciprocal_rank": 1.0,
       "expected": "documented",
       "generated_root_cause_is_sentinel": false,
-      "root_cause_alignment": 0.8726,
-      "root_cause_correct": true,
+      "root_cause_alignment": 0.3354,
+      "root_cause_correct": false,
       "resolution_relevance": null,
       "supporting_ticket_ids": [
-        "KAFKA-12951"
+        "CASSANDRA-16796"
       ],
       "evidence_support": true,
       "hallucination_flag": false,
       "confidence": "high",
       "status": "generated",
       "latency_ms": {
-        "embedding": 82.75,
-        "retrieval": 22.36,
-        "total_rca": 914.65
+        "embedding": 52.84,
+        "retrieval": 32.91,
+        "total_rca": 18574.52
       }
     },
     {
-      "id": "max-poll-interval-overflow",
-      "query": "Setting max.poll.interval.ms to a very large value causes an integer overflow in the join group timeout and breaks rebalancing.",
+      "id": "solr-grouped-query-renamed-key-npe",
+      "query": "A distributed grouped query in Solr throws a NullPointerException when the unique key field has been renamed.",
       "relevant_ids": [
-        "KAFKA-13126"
+        "SOLR-15273"
       ],
-      "reference_id": "KAFKA-13126",
+      "reference_id": "SOLR-15273",
       "retrieved_top5": [
-        "KAFKA-13126",
-        "KAFKA-12160",
-        "KAFKA-10870",
-        "KAFKA-12983",
-        "KAFKA-10793"
-      ],
-      "recall_at_5": 1.0,
-      "precision_at_5": 0.2,
-      "reciprocal_rank": 1.0,
-      "expected": "documented",
-      "generated_root_cause_is_sentinel": false,
-      "root_cause_alignment": 0.8115,
-      "root_cause_correct": true,
-      "resolution_relevance": null,
-      "supporting_ticket_ids": [
-        "KAFKA-13126"
-      ],
-      "evidence_support": true,
-      "hallucination_flag": false,
-      "confidence": "high",
-      "status": "generated",
-      "latency_ms": {
-        "embedding": 77.29,
-        "retrieval": 15.11,
-        "total_rca": 12729.09
-      }
-    },
-    {
-      "id": "consumer-cpu-broker-down",
-      "query": "Consumer poll pegs the CPU at 100% when it cannot connect to the broker.",
-      "relevant_ids": [
-        "KAFKA-10254"
-      ],
-      "reference_id": "KAFKA-10254",
-      "retrieved_top5": [
-        "KAFKA-10254",
-        "KAFKA-12427",
-        "KAFKA-12268",
-        "KAFKA-10793",
-        "KAFKA-13126"
-      ],
-      "recall_at_5": 1.0,
-      "precision_at_5": 0.2,
-      "reciprocal_rank": 1.0,
-      "expected": "abstain",
-      "generated_root_cause_is_sentinel": true,
-      "root_cause_alignment": null,
-      "root_cause_correct": true,
-      "resolution_relevance": null,
-      "supporting_ticket_ids": [],
-      "evidence_support": true,
-      "hallucination_flag": false,
-      "confidence": "high",
-      "status": "generated",
-      "latency_ms": {
-        "embedding": 13.19,
-        "retrieval": 10.83,
-        "total_rca": 16636.4
-      }
-    },
-    {
-      "id": "offset-reset-datetime",
-      "query": "Resetting consumer group offsets by datetime misinterprets microsecond precision when passing a timestamp.",
-      "relevant_ids": [
-        "KAFKA-10685"
-      ],
-      "reference_id": "KAFKA-10685",
-      "retrieved_top5": [
-        "KAFKA-10685",
-        "KAFKA-12896",
-        "KAFKA-12926",
-        "KAFKA-12455",
-        "KAFKA-10401"
-      ],
-      "recall_at_5": 1.0,
-      "precision_at_5": 0.2,
-      "reciprocal_rank": 1.0,
-      "expected": "documented",
-      "generated_root_cause_is_sentinel": false,
-      "root_cause_alignment": 0.7868,
-      "root_cause_correct": true,
-      "resolution_relevance": 0.7342,
-      "supporting_ticket_ids": [
-        "KAFKA-10685"
-      ],
-      "evidence_support": true,
-      "hallucination_flag": false,
-      "confidence": "high",
-      "status": "generated",
-      "latency_ms": {
-        "embedding": 13.19,
-        "retrieval": 14.17,
-        "total_rca": 18999.89
-      }
-    },
-    {
-      "id": "rebalance-in-progress",
-      "query": "A consumer times out and fails to rejoin because it does not handle a REBALANCE_IN_PROGRESS error from JoinGroup.",
-      "relevant_ids": [
-        "KAFKA-10870"
-      ],
-      "reference_id": "KAFKA-10870",
-      "retrieved_top5": [
-        "KAFKA-10870",
-        "KAFKA-12896",
-        "KAFKA-12983",
-        "KAFKA-12890",
-        "KAFKA-13126"
+        "SOLR-15273",
+        "SOLR-12128",
+        "SOLR-13414",
+        "SOLR-11532",
+        "SOLR-11130"
       ],
       "recall_at_5": 1.0,
       "precision_at_5": 0.2,
@@ -276,18 +240,89 @@
       "generated_root_cause_is_sentinel": false,
       "root_cause_alignment": 1.0,
       "root_cause_correct": true,
-      "resolution_relevance": null,
+      "resolution_relevance": 0.5256,
       "supporting_ticket_ids": [
-        "KAFKA-10870"
+        "SOLR-15273"
       ],
       "evidence_support": true,
       "hallucination_flag": false,
       "confidence": "high",
       "status": "generated",
       "latency_ms": {
-        "embedding": 8.0,
-        "retrieval": 56.21,
-        "total_rca": 13578.46
+        "embedding": 34.59,
+        "retrieval": 51.16,
+        "total_rca": 24328.9
+      }
+    },
+    {
+      "id": "zookeeper-listsubtreebfs-root",
+      "query": "Calling ZkUtil listSubTreeBFS on the root path throws an IllegalArgumentException because an invalid path with an empty node name is generated.",
+      "relevant_ids": [
+        "ZOOKEEPER-4325"
+      ],
+      "reference_id": "ZOOKEEPER-4325",
+      "retrieved_top5": [
+        "ZOOKEEPER-4325",
+        "ZOOKEEPER-1929",
+        "SOLR-12072",
+        "SOLR-14961",
+        "HBASE-21629"
+      ],
+      "recall_at_5": 1.0,
+      "precision_at_5": 0.2,
+      "reciprocal_rank": 1.0,
+      "expected": "documented",
+      "generated_root_cause_is_sentinel": false,
+      "root_cause_alignment": 0.5719,
+      "root_cause_correct": true,
+      "resolution_relevance": 0.5965,
+      "supporting_ticket_ids": [
+        "ZOOKEEPER-4325",
+        "SOLR-12072"
+      ],
+      "evidence_support": true,
+      "hallucination_flag": false,
+      "confidence": "medium",
+      "status": "generated",
+      "latency_ms": {
+        "embedding": 184.84,
+        "retrieval": 96.24,
+        "total_rca": 16089.86
+      }
+    },
+    {
+      "id": "hadoop-auth-jetty-server-dependency",
+      "query": "The hadoop-auth module should drop its jetty-server dependency because Jetty prevents loading jetty-server classes inside web applications.",
+      "relevant_ids": [
+        "HADOOP-17621"
+      ],
+      "reference_id": "HADOOP-17621",
+      "retrieved_top5": [
+        "HADOOP-17621",
+        "HADOOP-16727",
+        "HADOOP-16590",
+        "HADOOP-14024",
+        "HADOOP-13132"
+      ],
+      "recall_at_5": 1.0,
+      "precision_at_5": 0.2,
+      "reciprocal_rank": 1.0,
+      "expected": "documented",
+      "generated_root_cause_is_sentinel": false,
+      "root_cause_alignment": 0.8925,
+      "root_cause_correct": true,
+      "resolution_relevance": null,
+      "supporting_ticket_ids": [
+        "HADOOP-17621"
+      ],
+      "evidence_support": true,
+      "hallucination_flag": false,
+      "confidence": "high",
+      "status": "generated",
+      "latency_ms": {
+        "embedding": 65.86,
+        "retrieval": 31.12,
+        "total_rca": 21949.6
       }
     },
     {
@@ -296,11 +331,11 @@
       "relevant_ids": [],
       "reference_id": null,
       "retrieved_top5": [
-        "KAFKA-10693",
-        "KAFKA-13017",
-        "KAFKA-10597",
-        "KAFKA-10293",
-        "KAFKA-10716"
+        "KAFKA-13122",
+        "KAFKA-12726",
+        "KAFKA-9830",
+        "KAFKA-9674",
+        "KAFKA-9173"
       ],
       "recall_at_5": null,
       "precision_at_5": null,
@@ -316,9 +351,9 @@
       "confidence": "low",
       "status": "insufficient_evidence",
       "latency_ms": {
-        "embedding": 12.69,
-        "retrieval": 10.41,
-        "total_rca": 16.2
+        "embedding": 19.09,
+        "retrieval": 27.37,
+        "total_rca": 27.93
       }
     }
   ]

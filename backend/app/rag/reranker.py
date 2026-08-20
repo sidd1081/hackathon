@@ -38,6 +38,10 @@ W_TECHNICAL = 0.15
 W_KEYWORD = 0.15
 
 # Two-stage defaults: fetch a wider net from FAISS, then keep the best few.
+# With per-field truncation in the prompt (see app/rag/prompts.py), five
+# incidents assemble to ~2.8k tokens — comfortably within the Groq free-tier
+# 8k tokens/request budget. Truncation, not the incident count, is what keeps
+# the request small even when historical descriptions are multi-KB stack traces.
 DEFAULT_FETCH_K = 10
 DEFAULT_FINAL_K = 5
 
