@@ -25,8 +25,18 @@ import pandas as pd
 # Exact sentinel that must survive cleaning verbatim.
 NOT_DOCUMENTED = "Not explicitly documented."
 
-# Free-text columns that receive full Jira cleaning.
-TEXT_COLUMNS: tuple[str, ...] = ("description", "root_cause", "resolution")
+# Free-text columns that receive full Jira cleaning.  ``resolution_status`` is
+# intentionally excluded because it is Jira workflow state, not technical
+# evidence.  ``resolution_notes`` is the canonical technical-resolution field.
+TEXT_COLUMNS: tuple[str, ...] = (
+    "summary",
+    "description",
+    "components",
+    "labels",
+    "comments",
+    "root_cause",
+    "resolution_notes",
+)
 
 # --- Whitespace normalization -------------------------------------------------
 # Various Unicode spaces (incl. non-breaking space U+00A0) -> a regular space.
@@ -98,6 +108,19 @@ def _normalize_whitespace(text: str) -> str:
     return text.strip()
 
 
+def _is_missing(value: object) -> bool:
+    """Return whether a scalar dataframe value is missing.
+
+    CSV values are scalar, but this defensive check also avoids ambiguous
+    truth-value errors if a caller provides a list-like object.
+    """
+    if value is None:
+        return True
+    if not pd.api.types.is_scalar(value):
+        return False
+    return bool(pd.isna(value))
+
+
 def clean_text(value: object) -> object:
     """Clean a free-text field.
 
@@ -105,7 +128,7 @@ def clean_text(value: object) -> object:
     would invent data). The sentinel ``Not explicitly documented.`` is returned
     verbatim.
     """
-    if pd.isna(value):
+    if _is_missing(value):
         return value
 
     text = str(value)
@@ -128,7 +151,7 @@ def clean_text(value: object) -> object:
 
 def clean_ticket_id(value: object) -> object:
     """Clean a ticket ID: whitespace normalization only (never alters the ID)."""
-    if pd.isna(value):
+    if _is_missing(value):
         return value
     return _normalize_whitespace(str(value))
 

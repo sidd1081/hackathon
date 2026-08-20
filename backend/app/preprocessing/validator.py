@@ -12,12 +12,30 @@ from pathlib import Path
 
 import pandas as pd
 
-# The four columns the downstream RAG pipeline depends on.
+# Canonical columns required to ingest historical incidents.  ``resolution``
+# deliberately is not required: ``resolution_status`` is workflow state while
+# ``resolution_notes`` contains the technical fix evidence used by the RAG
+# pipeline.
 REQUIRED_COLUMNS: tuple[str, ...] = (
     "ticket_id",
+    "project",
+    "summary",
     "description",
     "root_cause",
-    "resolution",
+    "resolution_status",
+    "resolution_notes",
+)
+
+# These fields add useful context when present but must not reject an otherwise
+# canonical dataset when absent.
+OPTIONAL_COLUMNS: tuple[str, ...] = (
+    "components",
+    "labels",
+    "comments",
+    "root_cause_source",
+    "resolution_source",
+    "evidence_quality",
+    "search_text",
 )
 
 # backend/app/preprocessing/validator.py -> parents[2] == backend/

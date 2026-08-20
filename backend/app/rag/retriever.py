@@ -3,12 +3,15 @@
 Given a newly reported incident (free text), embed it and search the FAISS
 vector store for the most similar historical incidents:
 
-    new incident -> embedding -> FAISS search -> Top K
+    new incident -> format query -> embedding -> FAISS search -> Top K
+
+The query text is placed in the description portion of the same three-field
+template used when embedding historical incidents, so query and document
+vectors occupy the same representation space.
 
 Similarity is the cosine score returned by FAISS (embeddings are normalized, so
-inner product == cosine). No LLM is involved in scoring, and the historical
-``root_cause`` / ``resolution`` values are returned verbatim — never modified,
-never regenerated.
+inner product == cosine). No LLM is involved in scoring, and historical
+evidence is returned verbatim — never modified, never regenerated.
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ from dataclasses import asdict, dataclass
 from threading import Lock
 
 from app.core.logger import get_logger
+from app.preprocessing.transformer import SEARCH_TEXT_TEMPLATE
 from app.rag.embeddings import embed_text
 from app.rag.vector_store import VectorStore
 
@@ -36,13 +40,33 @@ class RetrievedIncident:
 
     rank: int
     ticket_id: str
+    project: str
+    summary: str
     description: str
     root_cause: str
-    resolution: str
+    resolution_status: str
+    resolution_notes: str
     similarity: float
 
+    @property
+    def resolution(self) -> str:
+        """Compatibility alias for technical resolution evidence only."""
+        return self.resolution_notes
+
     def to_dict(self) -> dict[str, object]:
-        return asdict(self)
+        payload = asdict(self)
+        payload["resolution"] = self.resolution_notes
+        return payload
+
+
+def _format_query(text: str) -> str:
+    """Wrap a query in the same template used for historical embeddings.
+
+    A submitted query is incident-description text, so project and summary are
+    intentionally blank. Root cause, technical-resolution, and Jira workflow
+    fields are never added to the query representation.
+    """
+    return SEARCH_TEXT_TEMPLATE.format(project="", summary="", description=text)
 
 
 def set_vector_store(store: VectorStore) -> None:
@@ -77,6 +101,9 @@ def retrieve_similar_incidents(
 ) -> list[RetrievedIncident]:
     """Return the ``top_k`` historical incidents most similar to ``query``.
 
+    The query is placed in the description slot of the same three-field
+    template used for historical embeddings before encoding.
+
     Args:
         query: The newly reported incident text.
         top_k: How many similar incidents to return (default 5).
@@ -98,16 +125,20 @@ def retrieve_similar_incidents(
         raise ValueError(f"top_k must be positive, got {top_k}")
 
     store = get_vector_store()
-    query_embedding = embed_text(text)
+    formatted = _format_query(text)
+    query_embedding = embed_text(formatted)
     hits = store.search(query_embedding, top_k=top_k)
 
     incidents = [
         RetrievedIncident(
             rank=hit.rank,
             ticket_id=hit.ticket_id,
+            project=hit.project,
+            summary=hit.summary,
             description=hit.description,
             root_cause=hit.root_cause,
-            resolution=hit.resolution,
+            resolution_status=hit.resolution_status,
+            resolution_notes=hit.resolution_notes,
             similarity=hit.score,
         )
         for hit in hits

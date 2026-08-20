@@ -3,7 +3,7 @@
 The system prompt encodes the hard rules (evidence-only, no hallucination,
 similarity-is-not-proof, the exact 'Not explicitly documented.' fallback). The
 user prompt packs the new incident together with the retrieved historical
-incidents (similarity, root cause, resolution) as evidence.
+incidents (similarity, root cause, technical resolution notes) as evidence.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ class EvidenceIncident(Protocol):
     ticket_id: str
     description: str
     root_cause: str
-    resolution: str
+    resolution_notes: str
     similarity: float
 
 
@@ -29,24 +29,27 @@ SYSTEM_PROMPT = f"""You are an Incident Root Cause Analysis assistant for suppor
 
 You are given a NEW incident and a set of RETRIEVED historical incidents that
 serve as your ONLY evidence. Each piece of evidence includes a similarity score,
-a historical root cause, and a historical resolution.
+a historical root cause, and historical technical resolution notes.
 
 Follow these rules strictly:
-1. Ground every statement ONLY in the provided evidence. NEVER invent, infer, or
-   add technical details (error names, configs, versions, components) that are
-   not present in the evidence.
-2. Similarity is only a retrieval hint. It is NOT proof that two incidents share
-   the same root cause. Judge on the actual technical content, not the score.
-3. Identify the single most likely TECHNICAL root cause that the evidence
-   supports.
-4. If the evidence does not clearly establish a technical root cause, set
-   root_cause to exactly: "{NOT_DOCUMENTED}" (verbatim, nothing added).
-5. Recommend a resolution grounded in the historical resolutions. If none is
-   supportable, set resolution to exactly: "{NOT_DOCUMENTED}".
-6. In supporting_ticket_ids, list ONLY the ticket IDs you actually relied upon.
-7. Set confidence to "low", "medium", or "high" based on how well the evidence
-   supports your conclusion. Weak or conflicting evidence means "low".
-8. Keep the summary concise (2-4 sentences) and free of invented facts.
+1. Do not invent root causes, resolutions, mechanisms, error names, settings,
+   versions, or other technical details.
+2. Do not infer causality solely from similarity or shared keywords; similarity
+   is only a retrieval hint, not proof of a shared mechanism.
+3. Do not turn an observed symptom into a root cause.
+4. Do not combine unrelated historical mechanisms to manufacture a cause or a
+   resolution. Each claim must be supported by a ticket with the same failure
+   mechanism.
+5. Use historical technical resolution notes only when they support the same
+   documented mechanism as the proposed root cause.
+6. Never treat Jira workflow status such as "Fixed", "Resolved", "Closed",
+   "Done", or "Merged" as technical resolution evidence. Workflow status is
+   intentionally not included in the evidence below.
+7. If evidence is insufficient, conflicting, or does not document the same
+   failure mechanism, set both root_cause and resolution to exactly:
+   "{NOT_DOCUMENTED}". Set confidence to "low" and state the limitation.
+8. Cite only supporting ticket IDs that you actually used. Keep the summary
+   concise (2-4 sentences) and free of invented facts.
 
 Do not output anything beyond the requested structured fields."""
 
@@ -73,7 +76,8 @@ def build_user_prompt(
                     f"(similarity {inc.similarity:.3f})",
                     f"Description: {inc.description}",
                     f"Historical root cause: {inc.root_cause}",
-                    f"Historical resolution: {inc.resolution}",
+                    "Historical technical resolution notes: "
+                    f"{inc.resolution_notes}",
                 ]
             )
 
@@ -82,8 +86,9 @@ def build_user_prompt(
             "",
             "## TASK",
             "Using ONLY the evidence above, produce the structured root-cause "
-            "analysis. Remember: do not fabricate, and if the technical root "
-            f'cause is not established, root_cause must be exactly "{NOT_DOCUMENTED}".',
+            "analysis. Do not infer causality from similarity alone. If the "
+            "technical mechanism is not documented, both root_cause and "
+            f'resolution must be exactly "{NOT_DOCUMENTED}".',
         ]
     )
     return "\n".join(parts)

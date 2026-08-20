@@ -98,22 +98,37 @@ class RerankedIncident:
 
     rank: int
     ticket_id: str
+    project: str
+    summary: str
     description: str
     root_cause: str
-    resolution: str
+    resolution_status: str
+    resolution_notes: str
     similarity: float          # original FAISS cosine (the semantic signal)
     keyword_overlap: float
     technical_overlap: float
     rerank_score: float        # final weighted blend
     matched_technical: list[str]
 
+    @property
+    def resolution(self) -> str:
+        """Compatibility alias for technical resolution evidence only."""
+        return self.resolution_notes
+
     def to_dict(self) -> dict[str, object]:
-        return asdict(self)
+        payload = asdict(self)
+        payload["resolution"] = self.resolution_notes
+        return payload
 
 
 def _candidate_text(incident: RetrievedIncident) -> str:
-    """Concatenate the fields used for term matching."""
-    return f"{incident.description} {incident.root_cause} {incident.resolution}"
+    """Return the text used for term matching during reranking.
+
+    Only the incident description is used for lexical overlap. Root cause and
+    technical-resolution notes are metadata returned after retrieval, not
+    signals for ranking.
+    """
+    return incident.description
 
 
 def rerank(
@@ -148,9 +163,12 @@ def rerank(
             RerankedIncident(
                 rank=0,  # assigned after sorting
                 ticket_id=cand.ticket_id,
+                project=cand.project,
+                summary=cand.summary,
                 description=cand.description,
                 root_cause=cand.root_cause,
-                resolution=cand.resolution,
+                resolution_status=cand.resolution_status,
+                resolution_notes=cand.resolution_notes,
                 similarity=semantic,
                 keyword_overlap=keyword_overlap,
                 technical_overlap=technical_overlap,

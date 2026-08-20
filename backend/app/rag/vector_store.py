@@ -8,8 +8,10 @@ The index and the metadata are stored in **separate** files:
     * ``index.faiss``   -- the FAISS index (vectors only)
     * ``metadata.pkl``  -- per-vector metadata, row i <-> vector i
 
-Each vector maps to a metadata record with: ``ticket_id``, ``description``,
-``root_cause``, ``resolution``.
+Each vector maps to canonical incident metadata. ``search_text`` is embedded;
+the root cause and technical resolution notes are retained only as retrieved
+evidence. Jira ``resolution_status`` remains separate from the technical
+resolution notes.
 """
 
 from __future__ import annotations
@@ -34,9 +36,16 @@ DEFAULT_METADATA_PATH: Path = DEFAULT_VECTORSTORE_DIR / "metadata.pkl"
 # The metadata fields each vector maps to (and their order).
 METADATA_FIELDS: tuple[str, ...] = (
     "ticket_id",
+    "project",
+    "summary",
     "description",
+    "components",
+    "labels",
+    "comments",
     "root_cause",
-    "resolution",
+    "resolution_status",
+    "resolution_notes",
+    "evidence_quality",
 )
 
 
@@ -47,9 +56,25 @@ class SearchResult:
     rank: int
     score: float
     ticket_id: str
+    project: str
+    summary: str
     description: str
+    components: str
+    labels: str
+    comments: str
     root_cause: str
-    resolution: str
+    resolution_status: str
+    resolution_notes: str
+    evidence_quality: str
+
+    @property
+    def resolution(self) -> str:
+        """Compatibility alias for the historical technical resolution.
+
+        This must never expose ``resolution_status`` as technical evidence.
+        Callers should migrate to ``resolution_notes``.
+        """
+        return self.resolution_notes
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -155,9 +180,16 @@ class VectorStore:
                     rank=rank,
                     score=float(score),
                     ticket_id=str(meta.get("ticket_id", "")),
+                    project=str(meta.get("project", "")),
+                    summary=str(meta.get("summary", "")),
                     description=str(meta.get("description", "")),
+                    components=str(meta.get("components", "")),
+                    labels=str(meta.get("labels", "")),
+                    comments=str(meta.get("comments", "")),
                     root_cause=str(meta.get("root_cause", "")),
-                    resolution=str(meta.get("resolution", "")),
+                    resolution_status=str(meta.get("resolution_status", "")),
+                    resolution_notes=str(meta.get("resolution_notes", "")),
+                    evidence_quality=str(meta.get("evidence_quality", "")),
                 )
             )
         return results

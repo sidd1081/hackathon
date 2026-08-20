@@ -59,6 +59,23 @@ def _normalize_sentinel(value: str | None) -> str:
     return text
 
 
+def _build_rca_messages(
+    new_incident: str, incidents: Sequence[EvidenceIncident]
+) -> list[object]:
+    """Build the Groq messages with technical resolution notes as evidence.
+
+    ``build_user_prompt`` reads ``resolution_notes`` from each incident. Jira
+    workflow status is intentionally not added to the prompt, so values such as
+    ``Fixed`` cannot be mistaken for a technical resolution.
+    """
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    return [
+        SystemMessage(content=SYSTEM_PROMPT),
+        HumanMessage(content=build_user_prompt(new_incident, incidents)),
+    ]
+
+
 def generate_rca(
     new_incident: str, incidents: Sequence[EvidenceIncident]
 ) -> RCAResponse:
@@ -66,7 +83,8 @@ def generate_rca(
 
     Args:
         new_incident: The newly reported incident text.
-        incidents: Retrieved historical incidents used as evidence.
+        incidents: Retrieved historical incidents, including documented
+            ``resolution_notes`` used as technical-resolution evidence.
 
     Returns:
         A validated :class:`RCAResponse`.
@@ -95,14 +113,7 @@ def generate_rca(
         )
 
     structured_llm = _build_structured_llm()
-    user_prompt = build_user_prompt(new_incident, incidents)
-
-    from langchain_core.messages import HumanMessage, SystemMessage
-
-    messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=user_prompt),
-    ]
+    messages = _build_rca_messages(new_incident, incidents)
 
     try:
         response = structured_llm.invoke(messages)

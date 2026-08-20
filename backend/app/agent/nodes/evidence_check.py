@@ -1,15 +1,28 @@
-"""evidence_check node: deterministic gate that decides the routing.
+"""evidence_check node: multi-dimensional evidence alignment gate.
 
-No LLM. Evidence is considered sufficient only when BOTH hold:
-  * at least one reranked incident is similar enough (similarity >= threshold), and
-  * at least one reranked incident has a documented (non-sentinel) root cause to
-    ground an answer on.
+No LLM. Similarity score alone is NOT sufficient to establish causal evidence.
+The gate evaluates 5 dimensions of alignment between the query and each
+retrieved evidence candidate:
 
-Otherwise the workflow routes to the fallback and returns the sentinel — this
-keeps a cheap, explainable guardrail out of the LLM and avoids a wasted call.
+    1. Component alignment  — same Kafka subsystem (consumer, broker, etc.)?
+    2. Symptom alignment    — similar observed symptoms (lag, error, crash, etc.)?
+    3. Mechanism alignment  — similar technical cause (exception, config, etc.)?
+    4. Trigger alignment    — similar triggering event (restart, rebalance, etc.)?
+    5. Root cause quality   — does the evidence have a real, non-trivial root cause?
+
+Evidence is considered sufficient only when:
+    * similarity >= MIN_SIMILARITY (basic relevance threshold), AND
+    * component alignment >= 0.5 (at least one shared component), AND
+    * at least 2 alignment dimensions score > 0, AND
+    * at least one evidence item has a quality root cause.
+
+Otherwise the workflow routes to the fallback — the LLM is never called.
 """
 
 from __future__ import annotations
+
+import re
+from dataclasses import dataclass
 
 from app.agent.state import RCAState
 from app.core.logger import get_logger
@@ -17,9 +30,194 @@ from app.models.schemas import NOT_DOCUMENTED
 
 logger = get_logger(__name__)
 
-# Minimum cosine similarity for the best evidence to be considered relevant.
+# --- Thresholds ---------------------------------------------------------------
 MIN_SIMILARITY = 0.35
+MIN_COMPONENT_ALIGNMENT = 0.5
+MIN_ALIGNED_DIMENSIONS = 2
 
+# --- Term dictionaries --------------------------------------------------------
+# Component/subsystem terms: lowercase tokens that identify a Kafka subsystem.
+COMPONENT_TERMS: frozenset[str] = frozenset({
+    "consumer", "producer", "broker", "connector", "connect",
+    "streams", "stream", "partition", "topic", "replica",
+    "controller", "zookeeper", "kraft", "raft",
+    "offset", "rebalance", "group", "coordinator",
+    "fetcher", "sender", "interceptor", "serializer", "deserializer",
+    "admin", "adminClient",
+})
+
+# Symptom terms: what the user observes.
+SYMPTOM_TERMS: frozenset[str] = frozenset({
+    "stop", "stopped", "fail", "failed", "failure", "failing",
+    "error", "exception", "crash", "crashed", "hang", "hanging", "hung",
+    "timeout", "lag", "lagging", "slow", "stuck", "unresponsive",
+    "unavailable", "unreachable", "down", "offline",
+    "rejected", "refused", "denied", "dropped",
+    "corrupt", "corrupted", "lost", "missing", "empty",
+    "null", "npe", "nullpointerexception",
+    "oom", "outofmemory", "leak", "leaking",
+    "broken", "flaky", "inconsistent", "mismatch",
+    "increasing", "growing", "accumulating",
+    "500", "503", "404", "200",
+})
+
+# Trigger terms: events that cause the issue.
+TRIGGER_TERMS: frozenset[str] = frozenset({
+    "restart", "restarted", "restarting",
+    "rebalance", "rebalancing",
+    "upgrade", "upgraded", "upgrading", "update", "updated",
+    "reassign", "reassignment", "reassigning",
+    "recover", "recovery", "recovering",
+    "shutdown", "failover", "rollback",
+    "deploy", "deployment", "redeploy",
+    "scale", "scaling", "resize",
+    "config", "configuration", "reconfigure",
+    "migrate", "migration",
+})
+
+# Technical mechanism terms: exception/error names, patterns.
+_TECH_PATTERNS = (
+    re.compile(r"\b\w+(?:\.\w+)+\b"),           # dotted identifiers
+    re.compile(r"\b\w*_\w+\b"),                  # snake_case
+    re.compile(r"\b[A-Za-z]*[a-z][A-Z]\w*\b"),   # camelCase/PascalCase
+    re.compile(r"\b[A-Z]{2,}\b"),                # ALL-CAPS acronyms
+)
+
+_WORD = re.compile(r"[A-Za-z0-9]+")
+
+
+# --- Helpers ------------------------------------------------------------------
+
+def _extract_words(text: str) -> set[str]:
+    """Extract lowercased words from text."""
+    return {m.lower() for m in _WORD.findall(text)}
+
+
+def _extract_technical(text: str) -> set[str]:
+    """Extract lowercased technical terms from text."""
+    terms: set[str] = set()
+    for pattern in _TECH_PATTERNS:
+        for match in pattern.findall(text):
+            if len(match) > 1:
+                terms.add(match.lower())
+    return terms
+
+
+def _overlap(query_terms: set[str], candidate_terms: set[str]) -> float:
+    """Fraction of query terms found in the candidate."""
+    if not query_terms:
+        return 0.0
+    return len(query_terms & candidate_terms) / len(query_terms)
+
+
+@dataclass
+class AlignmentScore:
+    """Multi-dimensional alignment between query and one evidence item."""
+    ticket_id: str
+    similarity: float
+    component: float
+    symptom: float
+    mechanism: float
+    trigger: float
+    root_cause_quality: float
+
+    @property
+    def active_dimensions(self) -> int:
+        """Count of dimensions with score > 0."""
+        return sum(1 for s in (
+            self.component, self.symptom, self.mechanism,
+            self.trigger, self.root_cause_quality,
+        ) if s > 0)
+
+    @property
+    def is_aligned(self) -> bool:
+        """Check multi-dimensional alignment."""
+        return (
+            self.similarity >= MIN_SIMILARITY
+            and self.component >= MIN_COMPONENT_ALIGNMENT
+            and self.active_dimensions >= MIN_ALIGNED_DIMENSIONS
+            and self.root_cause_quality > 0
+        )
+
+
+def _root_cause_quality(root_cause: str, description: str) -> float:
+    """Score the quality of a root cause field.
+
+    Returns 0.0 if:
+    - root cause is the sentinel
+    - root cause is empty
+    - root cause is just the description repeated (no real analysis)
+    - root cause is too short (< 20 chars) to be a real technical explanation
+
+    Returns 1.0 for a substantive, distinct root cause.
+    Returns 0.5 for a short but non-trivial root cause.
+    """
+    rc = root_cause.strip()
+    if not rc or rc == NOT_DOCUMENTED:
+        return 0.0
+
+    # If root_cause is essentially the description repeated, it's not useful.
+    desc_stripped = description.strip()
+    if rc == desc_stripped:
+        return 0.0
+    # Check if root cause is just the first sentence of the description.
+    first_sentence = desc_stripped.split(".")[0].strip() + "."
+    if rc == first_sentence or rc.rstrip(".") == first_sentence.rstrip("."):
+        return 0.0
+
+    # Very short root causes are probably not real technical explanations.
+    if len(rc) < 20:
+        return 0.3
+    if len(rc) < 50:
+        return 0.5
+    return 1.0
+
+
+def _score_alignment(
+    query_words: set[str],
+    query_technical: set[str],
+    query_components: set[str],
+    query_symptoms: set[str],
+    query_triggers: set[str],
+    candidate,
+) -> AlignmentScore:
+    """Compute alignment between the query and one evidence candidate."""
+    desc = candidate.description or ""
+    desc_words = _extract_words(desc)
+    desc_technical = _extract_technical(desc)
+
+    # Component alignment: what fraction of query components appear in evidence?
+    desc_components = desc_words & COMPONENT_TERMS
+    component = _overlap(query_components, desc_components)
+
+    # Symptom alignment
+    desc_symptoms = desc_words & SYMPTOM_TERMS
+    symptom = _overlap(query_symptoms, desc_symptoms)
+
+    # Mechanism alignment: shared technical terms (exception names, configs, etc.)
+    mechanism = _overlap(query_technical, desc_technical)
+
+    # Trigger alignment
+    desc_triggers = desc_words & TRIGGER_TERMS
+    trigger = _overlap(query_triggers, desc_triggers)
+
+    # Root cause quality
+    rc_quality = _root_cause_quality(
+        candidate.root_cause or "", candidate.description or ""
+    )
+
+    return AlignmentScore(
+        ticket_id=candidate.ticket_id,
+        similarity=float(candidate.similarity),
+        component=component,
+        symptom=symptom,
+        mechanism=mechanism,
+        trigger=trigger,
+        root_cause_quality=rc_quality,
+    )
+
+
+# --- Main node ----------------------------------------------------------------
 
 def evidence_check_node(state: RCAState) -> dict:
     evidence = state.get("evidence", [])
@@ -29,32 +227,78 @@ def evidence_check_node(state: RCAState) -> dict:
         logger.info("evidence_check: insufficient (%s)", reason)
         return {"evidence_sufficient": False, "evidence_reason": reason}
 
+    # Extract query dimensions once.
+    query = state.get("normalized_incident", "")
+    query_words = _extract_words(query)
+    query_technical = _extract_technical(query)
+    query_components = query_words & COMPONENT_TERMS
+    query_symptoms = query_words & SYMPTOM_TERMS
+    query_triggers = query_words & TRIGGER_TERMS
+
     top_similarity = max(item.similarity for item in evidence)
-    is_relevant = top_similarity >= MIN_SIMILARITY
-    documented = [
-        item
-        for item in evidence
-        if item.root_cause.strip() and item.root_cause.strip() != NOT_DOCUMENTED
-    ]
-    has_documented = len(documented) > 0
-    sufficient = is_relevant and has_documented
 
-    if sufficient:
+    # Quick exit: if similarity is below threshold, nothing can align.
+    if top_similarity < MIN_SIMILARITY:
         reason = (
-            f"Top similarity {top_similarity:.3f} >= {MIN_SIMILARITY} and "
-            f"{len(documented)} incident(s) have documented root causes."
+            f"Top similarity {top_similarity:.3f} < {MIN_SIMILARITY}; "
+            "no sufficiently similar historical incident."
         )
-    elif not is_relevant:
-        reason = (
-            f"Top similarity {top_similarity:.3f} < {MIN_SIMILARITY}; no "
-            "sufficiently similar historical incident."
-        )
-    else:
-        reason = "No retrieved incident has a documented root cause to ground on."
+        logger.info("evidence_check: insufficient (%s)", reason)
+        return {"evidence_sufficient": False, "evidence_reason": reason}
 
-    logger.info(
-        "evidence_check: %s (%s)",
-        "sufficient" if sufficient else "insufficient",
-        reason,
+    # Score each evidence item across all dimensions.
+    scores: list[AlignmentScore] = []
+    for item in evidence:
+        score = _score_alignment(
+            query_words, query_technical, query_components,
+            query_symptoms, query_triggers, item,
+        )
+        scores.append(score)
+        logger.debug(
+            "evidence_check alignment %s: component=%.2f symptom=%.2f "
+            "mechanism=%.2f trigger=%.2f rc_quality=%.2f dims=%d aligned=%s",
+            score.ticket_id, score.component, score.symptom,
+            score.mechanism, score.trigger, score.root_cause_quality,
+            score.active_dimensions, score.is_aligned,
+        )
+
+    aligned = [s for s in scores if s.is_aligned]
+
+    if aligned:
+        best = max(aligned, key=lambda s: s.similarity)
+        reason = (
+            f"{len(aligned)} evidence item(s) are aligned. "
+            f"Best: {best.ticket_id} (similarity={best.similarity:.3f}, "
+            f"component={best.component:.2f}, symptom={best.symptom:.2f}, "
+            f"mechanism={best.mechanism:.2f}, trigger={best.trigger:.2f}, "
+            f"rc_quality={best.root_cause_quality:.1f}, "
+            f"dims={best.active_dimensions})."
+        )
+        logger.info("evidence_check: sufficient (%s)", reason)
+        return {"evidence_sufficient": True, "evidence_reason": reason}
+
+    # Build an explanatory reason for why alignment failed.
+    best_score = max(scores, key=lambda s: s.similarity)
+    issues: list[str] = []
+
+    if best_score.component < MIN_COMPONENT_ALIGNMENT:
+        issues.append(
+            f"component alignment {best_score.component:.2f} < "
+            f"{MIN_COMPONENT_ALIGNMENT} (no shared subsystem)"
+        )
+    if best_score.active_dimensions < MIN_ALIGNED_DIMENSIONS:
+        issues.append(
+            f"only {best_score.active_dimensions} dimension(s) active "
+            f"(need >= {MIN_ALIGNED_DIMENSIONS})"
+        )
+    has_quality_rc = any(s.root_cause_quality > 0 for s in scores)
+    if not has_quality_rc:
+        issues.append("no evidence has a quality documented root cause")
+
+    reason = (
+        f"Similarity {top_similarity:.3f} >= {MIN_SIMILARITY} but evidence "
+        f"alignment is insufficient: {'; '.join(issues)}. "
+        f"Causal mechanism does not match the reported incident."
     )
-    return {"evidence_sufficient": sufficient, "evidence_reason": reason}
+    logger.info("evidence_check: insufficient (%s)", reason)
+    return {"evidence_sufficient": False, "evidence_reason": reason}

@@ -1,13 +1,17 @@
-"""Manual test for the historical incident retrieval layer.
+"""Full pipeline test for the RCA system.
 
 Usage (from the backend/ directory):
 
     uv run python -m scripts.test_retrieval
 
-Runs several realistic incident queries through
-``retrieve_similar_incidents`` and prints the Top 5 results for each so their
-relevance can be reviewed. Requires the FAISS index (run
-`uv run python -m scripts.build_index` first).
+Runs 4 test queries through the complete pipeline:
+    analyze -> retrieve -> rerank -> evidence_check -> generate/fallback -> validate
+
+Reports for each test:
+    * Top 5 evidence (ticket_id, similarity, description)
+    * Evidence decision (sufficient/insufficient + reason)
+    * RCA generated or fallback
+    * root_cause, resolution, confidence, supporting_ticket_ids
 """
 
 from __future__ import annotations
@@ -15,50 +19,102 @@ from __future__ import annotations
 import sys
 import textwrap
 
-from app.rag.retriever import retrieve_similar_incidents
+from app.agent.graph import run_rca_graph
 
-# Historical incident text can contain non-cp1252 characters (e.g. CJK
-# punctuation). Force UTF-8 output so printing never crashes on Windows.
+# Force UTF-8 output so printing never crashes on Windows.
 try:
     sys.stdout.reconfigure(encoding="utf-8")
-except (AttributeError, ValueError):  # pragma: no cover - non-reconfigurable stream
+except (AttributeError, ValueError):
     pass
 
-# At least five realistic software incidents (first is the given example).
+# The 4 required test queries.
 QUERIES: list[str] = [
-    "Kafka consumers stopped processing messages after a broker restart.",
-    "Producer requests fail with TimeoutException when sending records to the broker.",
-    "Consumer group keeps rebalancing repeatedly and never makes progress.",
-    "SSL/TLS handshake fails between the broker and client with certificate errors.",
-    "Kafka Streams application throws a NullPointerException while restoring its state store.",
-    "Offsets are not committed correctly, causing messages to be reprocessed after a restart.",
+    # TEST 1: consumer lag after broker restart — should NOT generate unsupported RCA
+    "Kafka consumers stop processing messages after a broker restart and "
+    "consumer lag continues increasing.",
+    # TEST 2: connector restart NPE + empty response — should match KAFKA-13139
+    "After restarting a Kafka connector without restarting its tasks, the REST "
+    "API returns HTTP 200 with an empty response body and the client throws a "
+    "NullPointerException.",
+    # TEST 3: under-replicated partitions after broker failure
+    "Several Kafka partitions are under-replicated after a broker failure and "
+    "replicas are not catching up after the broker recovers.",
+    # TEST 4: completely unrelated payroll query — should fallback immediately
+    "The payroll application cannot generate PDF salary slips.",
 ]
 
-_WRAP = 100
+_WRAP = 120
+_SEP = "=" * 120
+_SUB = "-" * 80
 
 
 def _short(text: str, width: int = _WRAP) -> str:
-    """Collapse and shorten a field for one-line-ish display."""
     collapsed = " ".join(str(text).split())
     return textwrap.shorten(collapsed, width=width, placeholder=" ...")
 
 
 def main() -> int:
     for q_index, query in enumerate(QUERIES, start=1):
-        print("=" * 100)
-        print(f"QUERY {q_index}: {query}")
-        print("=" * 100)
+        print(f"\n{_SEP}")
+        print(f"TEST {q_index}: {query}")
+        print(_SEP)
 
-        results = retrieve_similar_incidents(query, top_k=5)
-        if not results:
-            print("  (no results)")
-            continue
+        state = run_rca_graph(query)
 
-        for inc in results:
-            print(f"\n  #{inc.rank}  {inc.ticket_id}   similarity={inc.similarity:.4f}")
-            print(f"      description: {_short(inc.description)}")
-            print(f"      root_cause:  {_short(inc.root_cause)}")
-            print(f"      resolution:  {_short(inc.resolution)}")
+        # --- Top 5 evidence ---
+        evidence = state.get("evidence", [])
+        print(f"\n  Top {len(evidence)} Evidence:")
+        if not evidence:
+            print("    (none)")
+        else:
+            for inc in evidence:
+                print(
+                    f"    #{inc.rank}  {inc.ticket_id}  "
+                    f"similarity={inc.similarity:.4f}  "
+                    f"rerank={inc.rerank_score:.4f}"
+                )
+                print(f"        desc: {_short(inc.description)}")
+
+        # --- Evidence decision ---
+        print(f"\n  {_SUB}")
+        sufficient = state.get("evidence_sufficient", False)
+        reason = state.get("evidence_reason", "")
+        decision = "SUFFICIENT" if sufficient else "INSUFFICIENT"
+        print(f"  Evidence Decision: {decision}")
+        print(f"  Reason: {reason}")
+
+        # --- RCA output ---
+        print(f"\n  {_SUB}")
+        status = state.get("status", "unknown")
+        rca = state.get("rca")
+        if status == "insufficient_evidence":
+            print("  RCA: FALLBACK (insufficient evidence)")
+        else:
+            print("  RCA: GENERATED")
+
+        if rca:
+            print(f"  Root Cause:    {_short(rca.root_cause)}")
+            print(f"  Resolution:    {_short(rca.resolution)}")
+            print(f"  Confidence:    {rca.confidence}")
+            print(f"  Supporting:    {rca.supporting_ticket_ids}")
+            print(f"  Summary:       {_short(rca.summary)}")
+
+        # --- Validation ---
+        validation = state.get("validation", {})
+        if validation:
+            print(f"\n  {_SUB}")
+            print(f"  Validation:")
+            print(f"    mechanism_valid:       {validation.get('mechanism_valid', 'N/A')}")
+            print(f"    root_cause_documented: {validation.get('root_cause_documented', 'N/A')}")
+            print(f"    removed_citations:     {validation.get('removed_citations', [])}")
+            issues = validation.get("issues", [])
+            if issues:
+                print(f"    issues ({len(issues)}):")
+                for issue in issues:
+                    print(f"      - {issue}")
+            else:
+                print("    issues: none")
+
         print()
 
     return 0
