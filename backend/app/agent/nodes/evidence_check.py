@@ -4,17 +4,26 @@ No LLM. Similarity score alone is NOT sufficient to establish causal evidence.
 The gate evaluates 5 dimensions of alignment between the query and each
 retrieved evidence candidate:
 
-    1. Component alignment  — same Kafka subsystem (consumer, broker, etc.)?
+    1. Component alignment  — same subsystem across the 8 Apache projects
+       (consumer/broker, regionserver, namenode, taskmanager, znode, ...)?
     2. Symptom alignment    — similar observed symptoms (lag, error, crash, etc.)?
     3. Mechanism alignment  — similar technical cause (exception, config, etc.)?
     4. Trigger alignment    — similar triggering event (restart, rebalance, etc.)?
     5. Root cause quality   — does the evidence have a real, non-trivial root cause?
 
-Evidence is considered sufficient only when:
-    * similarity >= MIN_SIMILARITY (basic relevance threshold), AND
-    * component alignment >= 0.5 (at least one shared component), AND
-    * at least 2 alignment dimensions score > 0, AND
-    * at least one evidence item has a quality root cause.
+Evidence is considered sufficient only when at least one retrieved item is
+"aligned":
+    * similarity >= MIN_SIMILARITY (basic relevance floor; rejects
+      out-of-domain queries), AND
+    * the evidence has a documented, quality root cause to ground on, AND
+    * either >= MIN_ALIGNED_DIMENSIONS alignment dimensions agree, OR the
+      semantic match is strong on its own (similarity >= STRONG_SIMILARITY).
+
+The corpus spans 8 Apache projects, so component alignment is one contributing
+signal — NOT a hard, project-specific requirement (a single hard-coded
+subsystem vocabulary cannot gate every project's incidents). Topical alignment
+is instead established by the combination of similarity, multi-dimensional
+overlap, and a real root cause.
 
 Otherwise the workflow routes to the fallback — the LLM is never called.
 """
@@ -31,19 +40,51 @@ from app.models.schemas import NOT_DOCUMENTED
 logger = get_logger(__name__)
 
 # --- Thresholds ---------------------------------------------------------------
-MIN_SIMILARITY = 0.35
-MIN_COMPONENT_ALIGNMENT = 0.5
+# Basic relevance floor. Anything below this is treated as out-of-domain and the
+# workflow abstains without calling the LLM. Calibrated so genuinely unrelated
+# queries (e.g. a leaking coffee machine ~0.26) are rejected while true matches
+# across all 8 projects (>= ~0.65) pass.
+MIN_SIMILARITY = 0.45
+# A semantic match this strong is, on its own, enough topical alignment even if
+# the lexical overlap dimensions happen to be sparse (e.g. a well-paraphrased
+# query that shares few exact tokens with the historical description).
+STRONG_SIMILARITY = 0.60
 MIN_ALIGNED_DIMENSIONS = 2
 
 # --- Term dictionaries --------------------------------------------------------
-# Component/subsystem terms: lowercase tokens that identify a Kafka subsystem.
+# Component/subsystem terms across the 8 Apache projects in the corpus (Kafka,
+# Flink, Spark, HBase, Cassandra, Solr, Hadoop, ZooKeeper). This is one
+# contributing alignment signal, not a hard gate, so broad coverage is safe.
 COMPONENT_TERMS: frozenset[str] = frozenset({
+    # Kafka
     "consumer", "producer", "broker", "connector", "connect",
     "streams", "stream", "partition", "topic", "replica",
-    "controller", "zookeeper", "kraft", "raft",
-    "offset", "rebalance", "group", "coordinator",
+    "controller", "kraft", "raft",
+    "offset", "rebalance", "coordinator",
     "fetcher", "sender", "interceptor", "serializer", "deserializer",
-    "admin", "adminClient",
+    "adminclient",
+    # Flink
+    "flink", "jobmanager", "taskmanager", "checkpoint", "savepoint",
+    "watermark", "operator", "akka", "entrypoint", "slot",
+    # Spark
+    "spark", "executor", "driver", "rdd", "dataframe", "dataset",
+    "shuffle", "catalyst", "stage", "yarn",
+    # HBase
+    "hbase", "regionserver", "region", "hfile", "wal", "memstore",
+    "compaction", "mutator", "master",
+    # Cassandra
+    "cassandra", "gossip", "sstable", "memtable", "keyspace",
+    "tombstone", "repair", "ring", "node",
+    # Solr
+    "solr", "core", "collection", "shard", "index", "query", "luke",
+    # Hadoop / HDFS / YARN
+    "hadoop", "hdfs", "namenode", "datanode", "mapreduce",
+    "resourcemanager", "nodemanager", "jetty",
+    # ZooKeeper
+    "zookeeper", "znode", "quorum", "ensemble", "leader", "follower",
+    "watcher", "session", "election",
+    # cross-cutting subsystems
+    "group", "admin", "server", "client", "thread",
 })
 
 # Symptom terms: what the user observes.
@@ -131,12 +172,20 @@ class AlignmentScore:
 
     @property
     def is_aligned(self) -> bool:
-        """Check multi-dimensional alignment."""
+        """Check project-agnostic multi-dimensional alignment.
+
+        Requires basic relevance and a documented, quality root cause to ground
+        on, then accepts either multi-signal agreement (>= MIN_ALIGNED_DIMENSIONS
+        dimensions active) OR a strong standalone semantic match. Component is
+        one of the counted dimensions, not a hard, project-specific requirement.
+        """
+        if self.similarity < MIN_SIMILARITY:
+            return False
+        if self.root_cause_quality <= 0:
+            return False
         return (
-            self.similarity >= MIN_SIMILARITY
-            and self.component >= MIN_COMPONENT_ALIGNMENT
-            and self.active_dimensions >= MIN_ALIGNED_DIMENSIONS
-            and self.root_cause_quality > 0
+            self.active_dimensions >= MIN_ALIGNED_DIMENSIONS
+            or self.similarity >= STRONG_SIMILARITY
         )
 
 
@@ -281,19 +330,21 @@ def evidence_check_node(state: RCAState) -> dict:
     best_score = max(scores, key=lambda s: s.similarity)
     issues: list[str] = []
 
-    if best_score.component < MIN_COMPONENT_ALIGNMENT:
-        issues.append(
-            f"component alignment {best_score.component:.2f} < "
-            f"{MIN_COMPONENT_ALIGNMENT} (no shared subsystem)"
-        )
-    if best_score.active_dimensions < MIN_ALIGNED_DIMENSIONS:
-        issues.append(
-            f"only {best_score.active_dimensions} dimension(s) active "
-            f"(need >= {MIN_ALIGNED_DIMENSIONS})"
-        )
     has_quality_rc = any(s.root_cause_quality > 0 for s in scores)
     if not has_quality_rc:
-        issues.append("no evidence has a quality documented root cause")
+        issues.append("no evidence has a documented, quality root cause")
+    if (
+        best_score.active_dimensions < MIN_ALIGNED_DIMENSIONS
+        and best_score.similarity < STRONG_SIMILARITY
+    ):
+        issues.append(
+            f"only {best_score.active_dimensions} alignment dimension(s) active "
+            f"(need >= {MIN_ALIGNED_DIMENSIONS}) and similarity "
+            f"{best_score.similarity:.3f} < {STRONG_SIMILARITY} (not a strong "
+            "standalone match)"
+        )
+    if not issues:
+        issues.append("no evidence item met the combined alignment criteria")
 
     reason = (
         f"Similarity {top_similarity:.3f} >= {MIN_SIMILARITY} but evidence "

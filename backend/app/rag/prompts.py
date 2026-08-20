@@ -13,6 +13,34 @@ from typing import Protocol, runtime_checkable
 
 from app.models.schemas import NOT_DOCUMENTED
 
+# Per-field character caps for evidence included in the prompt. Historical Jira
+# descriptions can be multi-KB stack traces; packing several verbatim would blow
+# the model's token budget (Groq free tier caps requests/minute). Truncation
+# affects ONLY what is sent to the LLM — the deterministic validator still uses
+# the full evidence text from state, so grounding checks are unaffected.
+MAX_DESCRIPTION_CHARS = 1200
+MAX_ROOT_CAUSE_CHARS = 700
+MAX_RESOLUTION_CHARS = 700
+MAX_NEW_INCIDENT_CHARS = 2000
+
+
+def _clip(text: str, limit: int) -> str:
+    """Truncate ``text`` to ``limit`` chars on a word boundary, adding an ellipsis.
+
+    Missing/empty values pass through unchanged so sentinels stay verbatim.
+    """
+    if not text:
+        return text
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    # Prefer to break at the last space so we don't split a token mid-word.
+    space = cut.rfind(" ")
+    if space > limit * 0.6:
+        cut = cut[:space]
+    return cut.rstrip() + " […]"
+
 
 @runtime_checkable
 class EvidenceIncident(Protocol):
@@ -57,10 +85,15 @@ Do not output anything beyond the requested structured fields."""
 def build_user_prompt(
     new_incident: str, incidents: Sequence[EvidenceIncident]
 ) -> str:
-    """Assemble the evidence-packed user prompt for the RCA request."""
+    """Assemble the evidence-packed user prompt for the RCA request.
+
+    Evidence fields are length-capped (see the ``MAX_*`` constants) so large
+    historical descriptions do not exceed the model's token budget. The full
+    evidence text is still used by the downstream deterministic validator.
+    """
     parts: list[str] = [
         "## NEW INCIDENT",
-        new_incident.strip(),
+        _clip(new_incident, MAX_NEW_INCIDENT_CHARS),
         "",
         "## RETRIEVED HISTORICAL INCIDENTS (evidence)",
     ]
@@ -74,10 +107,11 @@ def build_user_prompt(
                     "",
                     f"### Evidence {i} — Ticket {inc.ticket_id} "
                     f"(similarity {inc.similarity:.3f})",
-                    f"Description: {inc.description}",
-                    f"Historical root cause: {inc.root_cause}",
+                    f"Description: {_clip(inc.description, MAX_DESCRIPTION_CHARS)}",
+                    "Historical root cause: "
+                    f"{_clip(inc.root_cause, MAX_ROOT_CAUSE_CHARS)}",
                     "Historical technical resolution notes: "
-                    f"{inc.resolution_notes}",
+                    f"{_clip(inc.resolution_notes, MAX_RESOLUTION_CHARS)}",
                 ]
             )
 

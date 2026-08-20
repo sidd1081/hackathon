@@ -62,60 +62,75 @@ RESULTS_PATH = _BACKEND_ROOT / "evaluation" / "results.json"
 # against the gold documented root cause (MiniLM embeddings).
 CORRECTNESS_THRESHOLD = 0.55
 
-# Hand-labeled test set. Queries are paraphrases (not copied ticket titles);
+# Hand-labeled test set, grounded in the current dataset (data/processed/
+# incidents_clean.csv). Queries are paraphrases (not copied ticket titles);
 # `relevant_ids` are the historical tickets a support engineer would accept as
 # matches; `reference_id` is the primary ticket used as the gold RCA answer.
-# The final case is intentionally out-of-domain to test abstention.
+# Every reference ticket is present in the corpus and has a documented root cause
+# and resolution notes. Cases span all 8 Apache projects; the final case is
+# intentionally out-of-domain to test abstention.
 TEST_SET: list[dict] = [
     {
-        "id": "connector-restart-npe",
-        "query": "Restarting a connector that has no running tasks returns an "
-        "empty HTTP response and the Connect REST client crashes with a "
-        "NullPointerException.",
-        "relevant_ids": ["KAFKA-13139"],
-        "reference_id": "KAFKA-13139",
+        "id": "kafka-keyvalueiterator-leak",
+        "query": "A Kafka Streams application leaks resources because "
+        "KeyValueIterator objects returned from state store queries are never "
+        "closed after they are used.",
+        "relevant_ids": ["KAFKA-13122"],
+        "reference_id": "KAFKA-13122",
     },
     {
-        "id": "rebalance-loop",
-        "query": "Our consumer group is stuck continuously rebalancing and "
-        "never stabilizes, so consumers make no progress.",
-        "relevant_ids": ["KAFKA-12890", "KAFKA-12896"],
-        "reference_id": "KAFKA-12890",
+        "id": "flink-entrypoint-shutdown-lock",
+        "query": "A Flink cluster entrypoint fails to shut down after an "
+        "uncaught exception because a thread join call keeps holding the "
+        "shutdown lock, so the process hangs instead of exiting.",
+        "relevant_ids": ["FLINK-23406"],
+        "reference_id": "FLINK-23406",
     },
     {
-        "id": "streams-state-restore-loop",
-        "query": "A Kafka Streams application gets stuck in an endless loop "
-        "while restoring a global table state store after startup.",
-        "relevant_ids": ["KAFKA-12951"],
-        "reference_id": "KAFKA-12951",
+        "id": "spark-yarnclustersuite-noclassdef",
+        "query": "Running the Spark YarnClusterSuite integration tests throws "
+        "NoClassDefFoundError unless the hadoop-3.2 build profile is explicitly "
+        "activated.",
+        "relevant_ids": ["SPARK-36067"],
+        "reference_id": "SPARK-36067",
     },
     {
-        "id": "max-poll-interval-overflow",
-        "query": "Setting max.poll.interval.ms to a very large value causes an "
-        "integer overflow in the join group timeout and breaks rebalancing.",
-        "relevant_ids": ["KAFKA-13126"],
-        "reference_id": "KAFKA-13126",
+        "id": "hbase-bufferedmutator-executor-leak",
+        "query": "Repeatedly calling Connection.getBufferedMutator for a table "
+        "leaks thread pool executors and never releases them.",
+        "relevant_ids": ["HBASE-26088"],
+        "reference_id": "HBASE-26088",
     },
     {
-        "id": "consumer-cpu-broker-down",
-        "query": "Consumer poll pegs the CPU at 100% when it cannot connect to "
-        "the broker.",
-        "relevant_ids": ["KAFKA-10254"],
-        "reference_id": "KAFKA-10254",
+        "id": "cassandra-pending-ranges-shutdown-peer",
+        "query": "When a moving node crashes hard during a range movement, "
+        "stale pending ranges remain for the shutdown peer and block a "
+        "subsequent node replacement.",
+        "relevant_ids": ["CASSANDRA-16796"],
+        "reference_id": "CASSANDRA-16796",
     },
     {
-        "id": "offset-reset-datetime",
-        "query": "Resetting consumer group offsets by datetime misinterprets "
-        "microsecond precision when passing a timestamp.",
-        "relevant_ids": ["KAFKA-10685"],
-        "reference_id": "KAFKA-10685",
+        "id": "solr-grouped-query-renamed-key-npe",
+        "query": "A distributed grouped query in Solr throws a "
+        "NullPointerException when the unique key field has been renamed.",
+        "relevant_ids": ["SOLR-15273"],
+        "reference_id": "SOLR-15273",
     },
     {
-        "id": "rebalance-in-progress",
-        "query": "A consumer times out and fails to rejoin because it does not "
-        "handle a REBALANCE_IN_PROGRESS error from JoinGroup.",
-        "relevant_ids": ["KAFKA-10870"],
-        "reference_id": "KAFKA-10870",
+        "id": "zookeeper-listsubtreebfs-root",
+        "query": "Calling ZkUtil listSubTreeBFS on the root path throws an "
+        "IllegalArgumentException because an invalid path with an empty node "
+        "name is generated.",
+        "relevant_ids": ["ZOOKEEPER-4325"],
+        "reference_id": "ZOOKEEPER-4325",
+    },
+    {
+        "id": "hadoop-auth-jetty-server-dependency",
+        "query": "The hadoop-auth module should drop its jetty-server "
+        "dependency because Jetty prevents loading jetty-server classes inside "
+        "web applications.",
+        "relevant_ids": ["HADOOP-17621"],
+        "reference_id": "HADOOP-17621",
     },
     {
         "id": "out-of-domain-coffee",
@@ -221,7 +236,7 @@ def main() -> int:
 
         ref_row = by_id.get(ref_id) if ref_id else None
         ref_rc = ref_row["root_cause"] if ref_row is not None else ""
-        ref_res = ref_row["resolution"] if ref_row is not None else ""
+        ref_res = ref_row["resolution_notes"] if ref_row is not None else ""
         gold_documented = bool(ref_id) and bool(ref_rc.strip()) and not _is_sentinel(ref_rc)
 
         if not gold_documented:
