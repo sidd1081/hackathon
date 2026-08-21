@@ -28,3 +28,6 @@ dist-ssr/
 Thumbs.db
 .vscode/
 .idea/
+
+# --- MS Office temp / lock files ---
+~$*

@@ -2,25 +2,35 @@
 
 A support-engineering tool that retrieves similar historical incidents and
 generates an **evidence-grounded** root cause analysis — and never fabricates a
-root cause. If the evidence doesn't document one, it returns exactly
+root cause. If the retrieved evidence doesn't document one, it returns exactly
 `Not explicitly documented.`
+
+- **Evidence-only:** every conclusion cites real historical ticket IDs.
+- **No semantic leakage:** only the problem statement (project + summary +
+  description) is embedded; root causes and resolutions are returned as
+  retrieved evidence, never mixed into the search text.
+- **Workflow status ≠ resolution:** Jira status (`Fixed`/`Resolved`/`Closed`) is
+  never treated as a technical fix — only the documented `resolution_notes` are.
 
 ## Architecture
 
 ```
-CSV → validate → clean → search_text → embeddings (MiniLM) → FAISS
-                                                                │
-new incident → retrieval → rerank → evidence check ┬─ sufficient → Groq LLM → validate → RCA
-                                                    └─ insufficient → "Not explicitly documented."
+CSV → validate → clean → search_text (project+summary+description)
+    → embeddings (MiniLM, 384-d) → FAISS (cosine) + metadata
+                                                    │
+new incident → analyze → retrieve (Top-10) → rerank (Top-5) → evidence check
+        ┬─ sufficient   → Groq LLM → validate (citation + mechanism) → RCA
+        └─ insufficient → "Not explicitly documented."
 ```
 
 - **Backend** ([`backend/`](backend/)) — Python, FastAPI, `uv`. RAG with Sentence
   Transformers + FAISS + LangChain, orchestrated by a LangGraph workflow, with
-  the LLM served by Groq. Deterministic steps (retrieval, reranking, evidence
-  gate, validation) live outside the LLM.
-- **Frontend** ([`frontend/`](frontend/)) — React + Vite + Tailwind CSS. An
-  enterprise dashboard that clearly separates AI-generated conclusions from the
-  historical dataset facts they're derived from.
+  the LLM served by Groq. The deterministic steps (retrieval, reranking, the
+  evidence gate, and post-generation validation) live outside the LLM.
+- **Frontend** ([`frontend/`](frontend/)) — React + Vite + Tailwind CSS. A
+  dashboard with an **Analyze** tab (upload dataset · ask query · RCA response ·
+  retrieved evidence) and an **Evaluation** tab (benchmark metrics), clearly
+  separating AI-generated conclusions from the dataset facts they derive from.
 
 ## Quick start
 
@@ -28,10 +38,11 @@ new incident → retrieval → rerank → evidence check ┬─ sufficient → G
 
 ```bash
 uv sync
-cp .env.example .env          # then set GROQ_API_KEY
-uv run python -m scripts.preprocess     # build data/processed/incidents_clean.csv
-uv run python -m scripts.build_index    # build the FAISS index
-uv run uvicorn app.main:app --reload    # http://127.0.0.1:8000  (docs at /docs)
+cp .env.example .env          # then set GROQ_API_KEY (required for RCA)
+uv run python -m scripts.validate_dataset   # sanity-check data/raw/incidents.csv
+uv run python -m scripts.preprocess         # -> data/processed/incidents_clean.csv
+uv run python -m scripts.build_index        # -> data/vectorstore/ (FAISS + metadata)
+uv run uvicorn app.main:app --reload        # http://127.0.0.1:8000  (docs at /docs)
 ```
 
 **Frontend** (from `frontend/`):
@@ -46,6 +57,10 @@ npm run dev                   # http://localhost:5173  (proxies /api to the back
 - `GET  /api/health` — liveness
 - `POST /api/incidents/analyze` — `{ "description": "..." }` → RCA + similar incidents
 - `POST /api/dataset/upload` — multipart CSV → re-validate, clean, embed, re-index
+- `GET  /api/evaluation` — latest offline benchmark metrics (from `evaluation/results.json`)
+
+The public API exposes the technical resolution under the field name
+`resolution` (mapped internally from `resolution_notes`) for a stable contract.
 
 ## Configuration
 
@@ -53,6 +68,7 @@ Backend settings (Pydantic) via `backend/.env` — see `backend/.env.example`:
 
 - `GROQ_API_KEY` (required for RCA) — **never committed**
 - `GROQ_MODEL` (default `openai/gpt-oss-120b`)
+- `GROQ_MAX_RETRIES` (default `6`) — rides out free-tier 429 rate limits
 - `EMBEDDING_MODEL` (default `sentence-transformers/all-MiniLM-L6-v2`)
 
 Frontend backend URL via `frontend/.env` → `VITE_API_BASE_URL` (empty uses the
@@ -60,14 +76,43 @@ Vite dev proxy).
 
 ## Dataset
 
-A 300-record curated subset of the Apache Jira (Kafka) issue dataset
-(columns: `ticket_id, description, root_cause, resolution`), derived from the
-public [Zenodo dataset](https://zenodo.org/records/7740379). The raw source is
-kept untouched at `backend/data/raw/incidents.csv`.
+3,000 historical incidents across **8 Apache projects** (Cassandra, Flink,
+Hadoop, HBase, Kafka, Solr, Spark, ZooKeeper), derived from public Apache Jira
+data. The raw source is kept untouched at `backend/data/raw/incidents.csv`.
+
+Canonical schema (14 columns):
+
+```
+ticket_id, project, summary, description, components, labels, comments,
+root_cause, resolution_status, resolution_notes, root_cause_source,
+resolution_source, evidence_quality, search_text
+```
+
+**Key distinction:** `resolution_status` is Jira workflow state (never used as
+evidence); `resolution_notes` is the actual technical fix. Only project, summary,
+and description are embedded into `search_text` — root cause and resolution are
+retrieved as metadata after a match, avoiding answer leakage.
 
 ## Evaluation
 
-See [`backend/docs/evaluation.md`](backend/docs/evaluation.md); machine-readable
-results in `backend/evaluation/results.json`. Metrics cover retrieval
-(Recall@5 / Precision@5 / MRR), RCA quality (correctness, evidence support,
-hallucination rate), and latency.
+Run `cd backend && uv run python -m scripts.evaluate`; results are written to
+`backend/evaluation/results.json` and surfaced in the frontend's **Evaluation**
+tab. Latest run:
+
+| Metric | Result |
+|---|---|
+| Recall@5 / MRR | 0.875 / 0.875 |
+| Root-cause correctness | 0.78 |
+| Evidence-support rate | 1.0 |
+| Hallucination rate | 0.0 |
+| Abstention-correct (out-of-domain) | 1.0 |
+
+See [`backend/docs/evaluation.md`](backend/docs/evaluation.md) for metric
+definitions.
+
+## Docs
+
+- [`PRESENTATION.md`](PRESENTATION.md) — problem, approach, architecture, and
+  the evaluator Q&A.
+- [`TEST_CASES.md`](TEST_CASES.md) — verified demo/test queries across all 8
+  projects, plus abstention cases.
