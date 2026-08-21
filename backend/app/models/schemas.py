@@ -110,3 +110,38 @@ class DatasetUploadResponse(BaseModel):
     )
     embedding_dimension: int = Field(description="Dimension of the stored vectors.")
     index_status: str = Field(description="State of the FAISS index, e.g. 'ready'.")
+
+
+class EvaluationResponse(BaseModel):
+    """Headline metrics from the latest offline evaluation run.
+
+    Sourced from ``evaluation/results.json`` (produced by
+    ``scripts/evaluate.py``). All metric fields are optional so a partial or
+    older results file still renders on the dashboard.
+    """
+
+    generated_at: str | None = Field(
+        default=None, description="ISO timestamp of the evaluation run."
+    )
+    num_cases: int = Field(default=0, description="Number of evaluated cases.")
+    embedding_model: str | None = None
+    groq_model: str | None = None
+    top_k: int | None = None
+
+    # Retrieval quality
+    recall_at_5: float | None = None
+    precision_at_5: float | None = None
+    mrr: float | None = None
+
+    # RCA quality
+    root_cause_correctness: float | None = None
+    mean_root_cause_alignment: float | None = None
+    resolution_relevance: float | None = None
+    evidence_support_rate: float | None = None
+    hallucination_rate: float | None = None
+    abstention_correct_rate: float | None = None
+
+    # Performance (steady-state means, milliseconds)
+    embedding_latency_ms: float | None = None
+    retrieval_latency_ms: float | None = None
+    total_rca_latency_ms: float | None = None
