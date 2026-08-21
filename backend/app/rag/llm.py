@@ -43,6 +43,9 @@ def _build_structured_llm():
         model=settings.groq_model,
         temperature=settings.llm_temperature,
         api_key=settings.groq_api_key,
+        # Ride out free-tier 429s (client backs off per Retry-After) so a burst
+        # of requests waits out the per-minute window instead of hard-failing.
+        max_retries=settings.groq_max_retries,
     )
     return llm.with_structured_output(RCAResponse)
 

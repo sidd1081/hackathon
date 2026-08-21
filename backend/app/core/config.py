@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     # (e.g. openai/gpt-oss-120b, openai/gpt-oss-20b, qwen/qwen3.6-27b).
     groq_model: str = "openai/gpt-oss-120b"
     llm_temperature: float = 0.0
+    # How many times to retry a Groq call on transient failures (notably HTTP
+    # 429 rate limits on the free tier). The client backs off per the server's
+    # Retry-After, so a burst of requests rides out the per-minute window
+    # instead of hard-failing.
+    groq_max_retries: int = 6
 
     # ---- Embeddings (reserved for a later RAG stage; not used yet) ----
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"

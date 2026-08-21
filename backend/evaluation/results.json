@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-20T14:28:09.839418+00:00",
+  "generated_at": "2026-08-21T11:51:24.048967+00:00",
   "config": {
     "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
     "groq_model": "openai/gpt-oss-120b",
@@ -15,33 +15,33 @@
     "mrr": 0.875
   },
   "rca": {
-    "root_cause_correctness": 0.6667,
-    "mean_root_cause_alignment": 0.608,
-    "resolution_relevance_mean": 0.514,
+    "root_cause_correctness": 0.7778,
+    "mean_root_cause_alignment": 0.5976,
+    "resolution_relevance_mean": 0.5451,
     "evidence_support_rate": 1.0,
     "hallucination_rate": 0.0,
     "abstention_correct_rate": 1.0
   },
   "performance_ms": {
     "embedding": {
-      "mean": 73.95,
-      "median": 52.84,
-      "min": 19.09,
-      "max": 184.84,
+      "mean": 41.29,
+      "median": 30.65,
+      "min": 19.65,
+      "max": 98.54,
       "n": 9
     },
     "retrieval": {
-      "mean": 53.99,
-      "median": 36.16,
-      "min": 16.7,
-      "max": 141.19,
+      "mean": 60.49,
+      "median": 41.81,
+      "min": 28.6,
+      "max": 141.44,
       "n": 9
     },
     "total_rca": {
-      "mean": 12024.74,
-      "median": 16089.86,
-      "min": 27.93,
-      "max": 24328.9,
+      "mean": 12338.51,
+      "median": 11025.86,
+      "min": 31.5,
+      "max": 24977.38,
       "n": 9
     }
   },
@@ -65,9 +65,9 @@
       "reciprocal_rank": 1.0,
       "expected": "documented",
       "generated_root_cause_is_sentinel": false,
-      "root_cause_alignment": 0.6562,
+      "root_cause_alignment": 0.6489,
       "root_cause_correct": true,
-      "resolution_relevance": 0.568,
+      "resolution_relevance": 0.6954,
       "supporting_ticket_ids": [
         "KAFKA-13122"
       ],
@@ -76,9 +76,9 @@
       "confidence": "high",
       "status": "generated",
       "latency_ms": {
-        "embedding": 166.31,
-        "retrieval": 141.19,
-        "total_rca": 1965.36
+        "embedding": 20.31,
+        "retrieval": 28.6,
+        "total_rca": 1825.66
       }
     },
     {
@@ -109,9 +109,9 @@
       "confidence": "low",
       "status": "generated",
       "latency_ms": {
-        "embedding": 25.39,
-        "retrieval": 36.16,
-        "total_rca": 1516.62
+        "embedding": 19.65,
+        "retrieval": 39.05,
+        "total_rca": 1534.4
       }
     },
     {
@@ -133,9 +133,9 @@
       "reciprocal_rank": 1.0,
       "expected": "documented",
       "generated_root_cause_is_sentinel": false,
-      "root_cause_alignment": 0.9354,
+      "root_cause_alignment": 0.8807,
       "root_cause_correct": true,
-      "resolution_relevance": 0.2487,
+      "resolution_relevance": 0.3086,
       "supporting_ticket_ids": [
         "SPARK-36067"
       ],
@@ -144,9 +144,9 @@
       "confidence": "high",
       "status": "generated",
       "latency_ms": {
-        "embedding": 71.93,
-        "retrieval": 53.04,
-        "total_rca": 2148.02
+        "embedding": 22.62,
+        "retrieval": 88.51,
+        "total_rca": 11025.86
       }
     },
     {
@@ -168,9 +168,9 @@
       "reciprocal_rank": 1.0,
       "expected": "documented",
       "generated_root_cause_is_sentinel": false,
-      "root_cause_alignment": 0.4725,
-      "root_cause_correct": false,
-      "resolution_relevance": 0.6313,
+      "root_cause_alignment": 0.5961,
+      "root_cause_correct": true,
+      "resolution_relevance": 0.531,
       "supporting_ticket_ids": [
         "HBASE-26088"
       ],
@@ -179,9 +179,9 @@
       "confidence": "medium",
       "status": "generated",
       "latency_ms": {
-        "embedding": 44.73,
-        "retrieval": 16.7,
-        "total_rca": 21621.9
+        "embedding": 30.65,
+        "retrieval": 41.81,
+        "total_rca": 23421.26
       }
     },
     {
@@ -203,7 +203,7 @@
       "reciprocal_rank": 1.0,
       "expected": "documented",
       "generated_root_cause_is_sentinel": false,
-      "root_cause_alignment": 0.3354,
+      "root_cause_alignment": 0.5037,
       "root_cause_correct": false,
       "resolution_relevance": null,
       "supporting_ticket_ids": [
@@ -214,9 +214,9 @@
       "confidence": "high",
       "status": "generated",
       "latency_ms": {
-        "embedding": 52.84,
-        "retrieval": 32.91,
-        "total_rca": 18574.52
+        "embedding": 98.54,
+        "retrieval": 141.44,
+        "total_rca": 23174.92
       }
     },
     {
@@ -238,9 +238,9 @@
       "reciprocal_rank": 1.0,
       "expected": "documented",
       "generated_root_cause_is_sentinel": false,
-      "root_cause_alignment": 1.0,
+      "root_cause_alignment": 0.6655,
       "root_cause_correct": true,
-      "resolution_relevance": 0.5256,
+      "resolution_relevance": 0.5475,
       "supporting_ticket_ids": [
         "SOLR-15273"
       ],
@@ -249,9 +249,9 @@
       "confidence": "high",
       "status": "generated",
       "latency_ms": {
-        "embedding": 34.59,
-        "retrieval": 51.16,
-        "total_rca": 24328.9
+        "embedding": 24.19,
+        "retrieval": 70.34,
+        "total_rca": 2988.72
       }
     },
     {
@@ -273,21 +273,21 @@
       "reciprocal_rank": 1.0,
       "expected": "documented",
       "generated_root_cause_is_sentinel": false,
-      "root_cause_alignment": 0.5719,
+      "root_cause_alignment": 0.5914,
       "root_cause_correct": true,
-      "resolution_relevance": 0.5965,
+      "resolution_relevance": 0.6428,
       "supporting_ticket_ids": [
         "ZOOKEEPER-4325",
         "SOLR-12072"
       ],
       "evidence_support": true,
       "hallucination_flag": false,
-      "confidence": "medium",
+      "confidence": "high",
       "status": "generated",
       "latency_ms": {
-        "embedding": 184.84,
-        "retrieval": 96.24,
-        "total_rca": 16089.86
+        "embedding": 55.37,
+        "retrieval": 35.76,
+        "total_rca": 24977.38
       }
     },
     {
@@ -309,7 +309,7 @@
       "reciprocal_rank": 1.0,
       "expected": "documented",
       "generated_root_cause_is_sentinel": false,
-      "root_cause_alignment": 0.8925,
+      "root_cause_alignment": 0.8941,
       "root_cause_correct": true,
       "resolution_relevance": null,
       "supporting_ticket_ids": [
@@ -317,12 +317,12 @@
       ],
       "evidence_support": true,
       "hallucination_flag": false,
-      "confidence": "high",
+      "confidence": "medium",
       "status": "generated",
       "latency_ms": {
-        "embedding": 65.86,
-        "retrieval": 31.12,
-        "total_rca": 21949.6
+        "embedding": 30.65,
+        "retrieval": 41.67,
+        "total_rca": 22066.87
       }
     },
     {
@@ -351,9 +351,9 @@
       "confidence": "low",
       "status": "insufficient_evidence",
       "latency_ms": {
-        "embedding": 19.09,
-        "retrieval": 27.37,
-        "total_rca": 27.93
+        "embedding": 69.61,
+        "retrieval": 57.21,
+        "total_rca": 31.5
       }
     }
   ]

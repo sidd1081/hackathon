@@ -44,9 +44,9 @@ export function DatasetPanel({ state, onUpload }) {
         </div>
 
         {state.status === "idle" && (
-          <p className="text-sm text-slate-500">
+          <p className="break-words text-sm text-slate-500">
             Required columns:{" "}
-            <code className="rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-700">
+            <code className="break-words rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-700">
               ticket_id, project, summary, description, root_cause,
               resolution_status, resolution_notes
             </code>

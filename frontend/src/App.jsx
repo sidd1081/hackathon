@@ -6,15 +6,23 @@ import { DatasetPanel } from "./components/DatasetPanel.jsx";
 import { IncidentForm } from "./components/IncidentForm.jsx";
 import { RcaSummary } from "./components/RcaSummary.jsx";
 import { SimilarIncidents } from "./components/SimilarIncidents.jsx";
+import { EvaluationPanel } from "./components/EvaluationPanel.jsx";
+import { Tabs } from "./components/ui/Tabs.jsx";
 import { useBackendHealth } from "./hooks/useBackendHealth.js";
 import { analyzeIncident, uploadDataset } from "./services/api.js";
 
 const IDLE = { status: "idle", data: null, error: null, latencyMs: null };
 
+const TABS = [
+  { id: "analyze", label: "Analyze" },
+  { id: "evaluation", label: "Evaluation" },
+];
+
 export default function App() {
   const [incidentText, setIncidentText] = useState("");
   const [analysis, setAnalysis] = useState(IDLE);
   const [dataset, setDataset] = useState(IDLE);
+  const [tab, setTab] = useState("analyze");
   const backend = useBackendHealth();
 
   const handleAnalyze = async () => {
@@ -51,22 +59,36 @@ export default function App() {
           <OfflineBanner onRetry={backend.recheck} />
         )}
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="space-y-6 lg:col-span-1">
-            <DatasetPanel state={dataset} onUpload={handleUpload} />
-            <IncidentForm
-              value={incidentText}
-              onChange={setIncidentText}
-              onAnalyze={handleAnalyze}
-              loading={analyzing}
-            />
-          </div>
+        <div className="mb-6 sm:max-w-xs">
+          <Tabs tabs={TABS} active={tab} onChange={setTab} />
+        </div>
 
-          <div className="space-y-6 lg:col-span-2">
+        {tab === "analyze" ? (
+          <div className="space-y-6">
+            {/* Top row: upload dataset (left) + ask query (right) */}
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="min-w-0">
+                <DatasetPanel state={dataset} onUpload={handleUpload} />
+              </div>
+              <div className="min-w-0">
+                <IncidentForm
+                  value={incidentText}
+                  onChange={setIncidentText}
+                  onAnalyze={handleAnalyze}
+                  loading={analyzing}
+                />
+              </div>
+            </div>
+
+            {/* Response (full width) */}
             <RcaSummary analysis={analysis} />
+
+            {/* Retrievals (full width) */}
             <SimilarIncidents analysis={analysis} />
           </div>
-        </div>
+        ) : (
+          <EvaluationPanel />
+        )}
       </main>
 
       <footer className="mx-auto max-w-6xl px-4 pb-8 pt-2 text-center text-xs text-slate-400 sm:px-6">

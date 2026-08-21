@@ -34,7 +34,7 @@ export function Section({
   return (
     <Card className={`${accentClass} ${className}`}>
       <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
-        <div>
+        <div className="min-w-0">
           {label && (
             <p className={`text-xs font-semibold uppercase tracking-wider ${labelTone}`}>
               {label}

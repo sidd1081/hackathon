@@ -9,12 +9,12 @@ import { NOT_DOCUMENTED } from "../lib/constants.js";
 function Block({ label, value }) {
   const undocumented = value === NOT_DOCUMENTED;
   return (
-    <div>
+    <div className="min-w-0">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
         {label}
       </p>
       <p
-        className={`mt-1 text-sm leading-relaxed ${
+        className={`mt-1 break-words text-sm leading-relaxed ${
           undocumented ? "italic text-amber-700" : "text-slate-700"
         }`}
       >

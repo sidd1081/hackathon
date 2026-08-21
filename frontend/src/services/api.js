@@ -77,3 +77,8 @@ export function uploadDataset(file) {
 export function getHealth() {
   return request("/api/health", { method: "GET" });
 }
+
+/** GET /api/evaluation */
+export function getEvaluation() {
+  return request("/api/evaluation", { method: "GET" });
+}
