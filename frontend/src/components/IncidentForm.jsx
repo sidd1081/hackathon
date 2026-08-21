@@ -1,9 +1,18 @@
+import { useState } from "react";
 import { Section } from "./ui/Card.jsx";
 import { Button } from "./ui/Button.jsx";
-import { EXAMPLE_INCIDENT } from "../lib/constants.js";
+import { EXAMPLE_INCIDENTS } from "../lib/constants.js";
 
 export function IncidentForm({ value, onChange, onAnalyze, loading }) {
   const isEmpty = !value.trim();
+  const [exampleIndex, setExampleIndex] = useState(0);
+
+  // Cycle through the verified examples on each click so the demo can show
+  // several different (grounded) incidents.
+  const useNextExample = () => {
+    onChange(EXAMPLE_INCIDENTS[exampleIndex % EXAMPLE_INCIDENTS.length]);
+    setExampleIndex((i) => (i + 1) % EXAMPLE_INCIDENTS.length);
+  };
 
   return (
     <Section
@@ -12,7 +21,7 @@ export function IncidentForm({ value, onChange, onAnalyze, loading }) {
       actions={
         <button
           type="button"
-          onClick={() => onChange(EXAMPLE_INCIDENT)}
+          onClick={useNextExample}
           className="text-xs font-medium text-indigo-600 hover:text-indigo-500"
         >
           Use example
