@@ -7,8 +7,10 @@ import { IncidentForm } from "./components/IncidentForm.jsx";
 import { RcaSummary } from "./components/RcaSummary.jsx";
 import { SimilarIncidents } from "./components/SimilarIncidents.jsx";
 import { EvaluationPanel } from "./components/EvaluationPanel.jsx";
+import { AuthPage } from "./components/AuthPage.jsx";
 import { Tabs } from "./components/ui/Tabs.jsx";
 import { useBackendHealth } from "./hooks/useBackendHealth.js";
+import { useAuth } from "./hooks/useAuth.js";
 import { analyzeIncident, uploadDataset } from "./services/api.js";
 
 const IDLE = { status: "idle", data: null, error: null, latencyMs: null };
@@ -24,6 +26,7 @@ export default function App() {
   const [dataset, setDataset] = useState(IDLE);
   const [tab, setTab] = useState("analyze");
   const backend = useBackendHealth();
+  const auth = useAuth();
 
   const handleAnalyze = async () => {
     if (!incidentText.trim()) return;
@@ -50,9 +53,30 @@ export default function App() {
 
   const analyzing = analysis.status === "loading";
 
+  // Gate the dashboard behind authentication.
+  if (!auth.isAuthenticated) {
+    return <AuthPage onLogin={auth.login} onSignup={auth.signup} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
-      <Header right={<HealthIndicator status={backend.status} />} />
+      <Header
+        right={
+          <div className="flex items-center gap-3">
+            <HealthIndicator status={backend.status} />
+            <span className="hidden text-sm text-slate-500 sm:inline">
+              {auth.user?.name || auth.user?.email}
+            </span>
+            <button
+              type="button"
+              onClick={auth.logout}
+              className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-300 transition hover:bg-slate-50"
+            >
+              Sign out
+            </button>
+          </div>
+        }
+      />
 
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-8">
         {backend.status === "offline" && (

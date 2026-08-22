@@ -7,8 +7,9 @@ returning the processing status, record count, and index status.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
+from app.api.routes.auth import get_current_user
 from app.core.logger import get_logger
 from app.models.schemas import DatasetUploadResponse
 from app.services.dataset_service import (
@@ -30,8 +31,11 @@ _MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB guard
     response_model=DatasetUploadResponse,
     summary="Upload a CSV and rebuild the incident index",
 )
-def upload_dataset(file: UploadFile = File(...)) -> DatasetUploadResponse:
-    """Validate, clean, embed, and index an uploaded incidents CSV."""
+def upload_dataset(
+    file: UploadFile = File(...),
+    _user: dict = Depends(get_current_user),
+) -> DatasetUploadResponse:
+    """Validate, clean, embed, and index an uploaded incidents CSV (auth required)."""
     filename = file.filename or "upload"
     if not filename.lower().endswith(".csv"):
         raise HTTPException(

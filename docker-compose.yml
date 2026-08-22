@@ -1,0 +1,32 @@
+# Portable deployment: run the whole app on any Docker host (EC2, Lightsail,
+# or locally). The web container serves the frontend and proxies /api to the
+# backend, so everything is same-origin.
+#
+#   1. cd backend && cp .env.example .env   # set GROQ_API_KEY (and JWT_SECRET in prod)
+#   2. docker compose up --build
+#   3. open http://localhost:8080
+#
+# The backend's ./backend/data directory is bind-mounted so the FAISS index and
+# the SQLite auth DB persist across restarts (built once on first start).
+
+services:
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend/data:/app/data
+    expose:
+      - "8000"
+    # Uncomment to reach the API directly (e.g. for debugging /docs):
+    # ports:
+    #   - "8000:8000"
+    restart: unless-stopped
+
+  web:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+    restart: unless-stopped

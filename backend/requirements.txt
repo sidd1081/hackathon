@@ -22,3 +22,6 @@ langchain-groq>=0.2
 # API: LangGraph workflow + file uploads (Stages 10-12)
 langgraph>=0.2
 python-multipart>=0.0.9
+
+# Auth: JWT tokens (password hashing uses the stdlib; no bcrypt needed)
+pyjwt>=2.9

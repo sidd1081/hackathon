@@ -55,12 +55,16 @@ npm run dev                   # http://localhost:5173  (proxies /api to the back
 ## API
 
 - `GET  /api/health` — liveness
-- `POST /api/incidents/analyze` — `{ "description": "..." }` → RCA + similar incidents
-- `POST /api/dataset/upload` — multipart CSV → re-validate, clean, embed, re-index
+- `POST /api/auth/signup` · `POST /api/auth/login` — return a JWT bearer token
+- `GET  /api/auth/me` — current user (requires token)
+- `POST /api/incidents/analyze` — `{ "description": "..." }` → RCA + similar incidents *(auth)*
+- `POST /api/dataset/upload` — multipart CSV → re-validate, clean, embed, re-index *(auth)*
 - `GET  /api/evaluation` — latest offline benchmark metrics (from `evaluation/results.json`)
 
-The public API exposes the technical resolution under the field name
-`resolution` (mapped internally from `resolution_notes`) for a stable contract.
+Auth uses JWT bearer tokens; passwords are hashed with PBKDF2 (stdlib) in a small
+SQLite store. The public API exposes the technical resolution under the field
+name `resolution` (mapped internally from `resolution_notes`) for a stable
+contract.
 
 ## Configuration
 
@@ -70,6 +74,7 @@ Backend settings (Pydantic) via `backend/.env` — see `backend/.env.example`:
 - `GROQ_MODEL` (default `openai/gpt-oss-120b`)
 - `GROQ_MAX_RETRIES` (default `6`) — rides out free-tier 429 rate limits
 - `EMBEDDING_MODEL` (default `sentence-transformers/all-MiniLM-L6-v2`)
+- `JWT_SECRET` (**override in production**) — signs auth tokens
 
 Frontend backend URL via `frontend/.env` → `VITE_API_BASE_URL` (empty uses the
 Vite dev proxy).

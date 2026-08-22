@@ -145,3 +145,51 @@ class EvaluationResponse(BaseModel):
     embedding_latency_ms: float | None = None
     retrieval_latency_ms: float | None = None
     total_rca_latency_ms: float | None = None
+
+
+# --- Auth ---------------------------------------------------------------------
+
+# A pragmatic email constraint (avoids the extra email-validator dependency):
+# trimmed, lowercased at the service layer, must contain one "@" with text on
+# both sides. Full RFC validation is unnecessary for this app.
+Email = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True, min_length=3, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+    ),
+]
+Password = Annotated[str, StringConstraints(min_length=8, max_length=128)]
+Name = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)
+]
+
+
+class SignupRequest(BaseModel):
+    """Request body for POST /api/auth/signup."""
+
+    name: Name = Field(description="Display name.")
+    email: Email = Field(description="Login email (case-insensitive).")
+    password: Password = Field(description="At least 8 characters.")
+
+
+class LoginRequest(BaseModel):
+    """Request body for POST /api/auth/login."""
+
+    email: Email
+    password: Annotated[str, StringConstraints(min_length=1, max_length=128)]
+
+
+class UserOut(BaseModel):
+    """Public representation of a user (never includes the password hash)."""
+
+    id: int
+    name: str
+    email: str
+
+
+class AuthResponse(BaseModel):
+    """Response body for signup/login: a bearer token plus the user."""
+
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
