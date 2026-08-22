@@ -36,6 +36,10 @@ data/vectorstore/*
 !data/processed/.gitkeep
 !data/vectorstore/.gitkeep
 
+# --- Auth database (contains user records / password hashes) ---
+data/*.db
+data/*.db-journal
+
 # --- IDE / OS ---
 .vscode/
 .idea/

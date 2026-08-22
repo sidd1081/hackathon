@@ -6,8 +6,9 @@ incident and return the structured analysis plus supporting evidence.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.api.routes.auth import get_current_user
 from app.core.logger import get_logger
 from app.models.schemas import AnalyzeRequest, AnalyzeResponse
 from app.rag.llm import LLMError
@@ -24,10 +25,14 @@ router = APIRouter(prefix="/incidents", tags=["incidents"])
     response_model=AnalyzeResponse,
     summary="Analyze a newly reported incident",
 )
-def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
+def analyze(
+    request: AnalyzeRequest,
+    _user: dict = Depends(get_current_user),
+) -> AnalyzeResponse:
     """Retrieve similar historical incidents and generate an RCA.
 
-    The request body is validated by Pydantic (empty descriptions -> 422).
+    Requires authentication. The request body is validated by Pydantic (empty
+    descriptions -> 422).
     """
     try:
         return analyze_incident(request.description)

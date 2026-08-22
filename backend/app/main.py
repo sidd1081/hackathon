@@ -9,7 +9,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import dataset, evaluation, health, incidents
+from app.api.routes import auth, dataset, evaluation, health, incidents
 from app.core.config import settings
 from app.core.logger import configure_logging, get_logger
 
@@ -33,6 +33,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health.router, prefix=settings.api_prefix)
+    app.include_router(auth.router, prefix=settings.api_prefix)
     app.include_router(incidents.router, prefix=settings.api_prefix)
     app.include_router(dataset.router, prefix=settings.api_prefix)
     app.include_router(evaluation.router, prefix=settings.api_prefix)

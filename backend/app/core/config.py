@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     # ---- Embeddings (reserved for a later RAG stage; not used yet) ----
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
 
+    # ---- Auth (JWT) ----
+    # Secret used to sign JWTs. MUST be overridden in production via JWT_SECRET.
+    # (>=32 bytes to satisfy HS256 key-length guidance even in dev.)
+    jwt_secret: str = "dev-insecure-change-me-set-JWT_SECRET-in-prod"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 720  # 12 hours
+
 
 @lru_cache
 def get_settings() -> Settings:

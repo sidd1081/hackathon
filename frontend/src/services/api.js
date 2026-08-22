@@ -5,6 +5,31 @@
 // variable. Empty (default) means "use the Vite dev proxy" (same-origin /api).
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
+// --- auth token storage ------------------------------------------------------
+const TOKEN_KEY = "rca.auth.token";
+
+export function getToken() {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setToken(token) {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* ignore storage errors (e.g. private mode) */
+  }
+}
+
+function authHeaders() {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 /**
  * Turn a backend error payload into a readable message.
  * The backend returns `detail` as either a string, a Pydantic 422 array, or a
@@ -37,9 +62,10 @@ function extractErrorMessage(payload, status) {
 }
 
 async function request(path, options = {}) {
+  const headers = { ...authHeaders(), ...(options.headers || {}) };
   let response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, options);
+    response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
   } catch {
     throw new Error(
       "Could not reach the server. Is the backend running on the expected port?",
@@ -81,4 +107,27 @@ export function getHealth() {
 /** GET /api/evaluation */
 export function getEvaluation() {
   return request("/api/evaluation", { method: "GET" });
+}
+
+/** POST /api/auth/signup → { access_token, user } */
+export function signup(name, email, password) {
+  return request("/api/auth/signup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, email, password }),
+  });
+}
+
+/** POST /api/auth/login → { access_token, user } */
+export function login(email, password) {
+  return request("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+/** GET /api/auth/me → user (requires token) */
+export function getMe() {
+  return request("/api/auth/me", { method: "GET" });
 }
