@@ -101,6 +101,56 @@ This compose setup runs unchanged on a single VM:
 
 ---
 
+## C. Google Cloud Run (backend)
+
+Cloud Run runs the backend container, scales to zero when idle (generous free
+tier), and injects a `PORT` the root [Dockerfile](Dockerfile) already respects —
+so **no changes are needed**. Unlike HF's git, Cloud Build just uploads the build
+context, so the 35 MB dataset needs no Git LFS.
+
+### Prerequisites
+- `gcloud` CLI installed and `gcloud auth login`
+- A GCP project with **billing enabled** (Cloud Run's free tier still requires a
+  billing account)
+
+### One-time setup
+```bash
+gcloud config set project YOUR_PROJECT_ID
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+gcloud config set builds/timeout 1800   # our build (~10 min) exceeds the 600s default
+```
+
+### Deploy (from source — simplest)
+```bash
+gcloud run deploy incident-rca-api \
+  --source . \
+  --region us-central1 \
+  --memory 4Gi \
+  --cpu 2 \
+  --timeout 300 \
+  --allow-unauthenticated \
+  --set-env-vars "GROQ_API_KEY=YOUR_KEY,JWT_SECRET=YOUR_RANDOM,CORS_ORIGINS=https://your-app.vercel.app"
+```
+- `--source .` → Cloud Build builds the root Dockerfile automatically.
+- **`--memory 4Gi` is required** — PyTorch OOMs at the 512 MB default.
+- Returns a URL like `https://incident-rca-api-xxxx-uc.a.run.app`. Verify
+  `…/api/health` → `{"status":"ok"}`, then set your Vercel `VITE_API_BASE_URL`
+  to that URL.
+
+Or just run the helper: `./deploy-cloudrun.sh` (see the script header for env vars).
+
+### Notes
+- **Cold starts:** the image is ~9 GB (PyTorch), so the first request after idle
+  pulls the image + loads the model (~30–60 s). Add `--min-instances 1` to keep
+  one warm (small cost), or accept the cold start on the free tier.
+- **Ephemeral filesystem:** the FAISS index is baked in (always present), but the
+  SQLite auth DB resets when an instance recycles — use Cloud SQL for durable
+  users.
+- **Better secrets:** for production, store `GROQ_API_KEY`/`JWT_SECRET` in Secret
+  Manager and reference them with `--set-secrets` instead of `--set-env-vars`.
+
+---
+
 ## B. Hugging Face Spaces (backend) + Vercel (frontend)
 
 Free hosting. The backend runs as a Docker Space (HF free CPU: 2 vCPU / 16 GB,
