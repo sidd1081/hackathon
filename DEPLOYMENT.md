@@ -1,5 +1,16 @@
 # Deployment
 
+Two supported ways to deploy:
+
+- **A. Docker Compose** on a single host (EC2/Lightsail/local) — one command, same-origin.
+- **B. Hugging Face Spaces (backend) + Vercel (frontend)** — free hosting, split
+  origins (see the CORS step). Jump to
+  [that section](#b-hugging-face-spaces-backend--vercel-frontend).
+
+---
+
+## A. Docker Compose (single host)
+
 The app ships as two containers wired together by Docker Compose:
 
 - **backend** — FastAPI + Sentence-Transformers (MiniLM, baked in) + FAISS + Groq
@@ -87,3 +98,82 @@ This compose setup runs unchanged on a single VM:
   HuggingFace download.
 - Secrets are **never** baked into images — they're injected at runtime via
   compose `env_file`.
+
+---
+
+## B. Hugging Face Spaces (backend) + Vercel (frontend)
+
+Free hosting. The backend runs as a Docker Space (HF free CPU: 2 vCPU / 16 GB,
+enough for PyTorch); the frontend is a static Vercel deploy that calls the Space.
+Because they're on different origins, the backend must allow the Vercel domain
+via `CORS_ORIGINS`.
+
+```
+Vercel (frontend) ──HTTPS──▶ https://<user>-<space>.hf.space/api/*  (HF Space)
+                                       └─ CORS_ORIGINS = your Vercel URL
+```
+
+### B1. Backend → Hugging Face Space
+
+The **root `Dockerfile`** is backend-only and serves the API on port **7860**
+(HF's default), with the MiniLM model and FAISS index baked in for instant boot.
+
+1. Create a Space: <https://huggingface.co/new-space> → **SDK: Docker** → blank
+   template → hardware **CPU basic (free)**.
+2. Push this project to the Space's git repo (HF builds from the root
+   `Dockerfile`). The Space's `README.md` must start with this metadata header —
+   prepend it if pushing this repo's README:
+
+   ```yaml
+   ---
+   title: AI Incident RCA Assistant API
+   emoji: 🛠️
+   colorFrom: indigo
+   colorTo: blue
+   sdk: docker
+   app_port: 7860
+   pinned: false
+   ---
+   ```
+
+   The 35 MB dataset must be tracked with **Git LFS** on the Space (HF requires
+   LFS for files > 10 MB):
+
+   ```bash
+   git clone https://huggingface.co/spaces/<user>/<space> && cd <space>
+   #   copy the project files in (or add the Space as a remote of this repo)
+   git lfs install
+   git lfs track "*.csv"
+   git add .gitattributes .
+   git commit -m "Deploy backend" && git push
+   ```
+
+3. In the Space → **Settings → Variables and secrets**, add:
+   - `GROQ_API_KEY` — your Groq key *(secret)*
+   - `JWT_SECRET` — a long random string *(secret)*
+   - `CORS_ORIGINS` — your Vercel URL (set after B2; start with `*` if unsure)
+4. The Space builds (~10 min: Torch + model + index) then serves at
+   `https://<user>-<space>.hf.space`. Verify `…/api/health` and `…/docs`.
+
+> Free Spaces have **ephemeral storage**: the index is baked into the image (always
+> present), but the SQLite **auth DB resets** on restart/rebuild — registered users
+> are lost. Fine for a demo; use a managed DB for anything durable.
+
+### B2. Frontend → Vercel
+
+1. Vercel → **Add New → Project** → import the GitHub repo.
+2. **Root Directory:** `frontend` (the included `frontend/vercel.json` sets the
+   Vite build + SPA rewrites).
+3. **Environment variable:** `VITE_API_BASE_URL = https://<user>-<space>.hf.space`
+   (your Space URL, **no trailing slash**).
+4. Deploy → you get `https://<app>.vercel.app`.
+
+### B3. Wire them together (order matters)
+
+1. Deploy the **backend Space** first → note its URL.
+2. Deploy **Vercel** with `VITE_API_BASE_URL` = the Space URL.
+3. Back in the Space, set `CORS_ORIGINS` = your Vercel URL → **Restart** the Space.
+4. Open the Vercel URL, sign up, and analyze an incident.
+
+If API calls fail with a CORS error in the browser console, `CORS_ORIGINS` on the
+Space doesn't match the Vercel origin exactly (scheme + host, no trailing slash).
