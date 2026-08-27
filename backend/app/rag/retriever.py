@@ -29,6 +29,9 @@ logger = get_logger(__name__)
 _store: VectorStore | None = None
 _store_lock = Lock()
 
+_bm25_store: "BM25Store | None" = None  # noqa: F821 - lazy import
+_bm25_lock = Lock()
+
 
 class RetrievalError(RuntimeError):
     """Raised when retrieval cannot be performed (e.g. missing vector store)."""
@@ -95,6 +98,34 @@ def get_vector_store() -> VectorStore:
                     ) from exc
     return _store
 
+
+def set_bm25_store(store: "BM25Store") -> None:  # noqa: F821
+    """Replace the cached BM25 store (e.g. after rebuilding the index)."""
+    global _bm25_store
+    with _bm25_lock:
+        _bm25_store = store
+
+
+def get_bm25_store() -> "BM25Store":  # noqa: F821
+    """Load the BM25 index once (thread-safe) and reuse it.
+
+    Falls back gracefully: if the pickle doesn't exist, raises
+    ``RetrievalError`` which the hybrid retriever catches.
+    """
+    global _bm25_store
+    if _bm25_store is None:
+        with _bm25_lock:
+            if _bm25_store is None:
+                from app.rag.bm25_store import BM25Store
+
+                try:
+                    _bm25_store = BM25Store.load()
+                except FileNotFoundError as exc:
+                    raise RetrievalError(
+                        "BM25 index not found. Rebuild with "
+                        "`uv run python -m scripts.build_index`."
+                    ) from exc
+    return _bm25_store
 
 def retrieve_similar_incidents(
     query: str, top_k: int = 5

@@ -1,8 +1,8 @@
-"""Build the FAISS index from the processed incidents CSV.
+"""Build the FAISS and BM25 indexes from the processed incidents CSV.
 
 Workflow:
     load processed CSV -> read search_text -> generate embeddings ->
-    build FAISS -> store metadata -> save index + metadata to disk.
+    build FAISS -> build BM25 -> store metadata -> save both to disk.
 
 Usage (from the backend/ directory):
 
@@ -20,6 +20,7 @@ from pathlib import Path
 import pandas as pd
 
 from app.preprocessing.transformer import SEARCH_TEXT_COLUMN
+from app.rag.bm25_store import DEFAULT_BM25_PATH, BM25Store
 from app.rag.embeddings import embed_texts
 from app.rag.vector_store import (
     DEFAULT_INDEX_PATH,
@@ -70,8 +71,13 @@ def main(argv: list[str] | None = None) -> int:
     store = VectorStore.build(embeddings, metadata)
     store.save(DEFAULT_INDEX_PATH, DEFAULT_METADATA_PATH)
 
+    # 7. Build BM25 index from the same corpus.
+    print(f"Building BM25 index from {len(texts)} documents ...")
+    bm25_store = BM25Store.build(texts, metadata)
+    bm25_store.save(DEFAULT_BM25_PATH)
+
     # Verification output.
-    print("\nFAISS index built and saved.")
+    print("\n=== FAISS index ===")
     print(f"  number of vectors:   {store.size}")
     print(f"  embedding dimension: {store.dimension}")
     print(
@@ -84,8 +90,18 @@ def main(argv: list[str] | None = None) -> int:
         f"({'exists' if DEFAULT_METADATA_PATH.is_file() else 'MISSING'}, "
         f"{DEFAULT_METADATA_PATH.stat().st_size} bytes)"
     )
+
+    print(f"\n=== BM25 index ===")
+    print(f"  number of documents: {bm25_store.size}")
+    bm25_path = Path(DEFAULT_BM25_PATH)
+    print(
+        f"  index file:          {bm25_path} "
+        f"({'exists' if bm25_path.is_file() else 'MISSING'}, "
+        f"{bm25_path.stat().st_size} bytes)"
+    )
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
