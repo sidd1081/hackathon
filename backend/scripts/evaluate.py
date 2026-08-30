@@ -1,9 +1,10 @@
 """End-to-end evaluation of the RCA pipeline.
 
-Runs a hand-labeled test set through the REAL pipeline (embeddings -> FAISS ->
-rerank -> LangGraph -> Groq) and measures retrieval quality, RCA quality, and
-latency. Nothing is fabricated: every number is computed from an actual run and
-every per-case detail is written to evaluation/results.json for inspection.
+Runs a hand-labeled test set through the REAL pipeline (hybrid retrieval:
+FAISS + BM25 -> RRF fusion -> rerank -> LangGraph -> Groq) and measures
+retrieval quality, RCA quality, and latency. Nothing is fabricated: every
+number is computed from an actual run and every per-case detail is written
+to evaluation/results.json for inspection.
 
 Metric definitions (see docs/evaluation.md for the full write-up):
 
@@ -51,8 +52,9 @@ from app.agent.graph import run_rca_graph
 from app.core.config import settings
 from app.models.schemas import NOT_DOCUMENTED
 from app.rag.embeddings import embed_text, embed_texts, get_embedding_model
-from app.rag.reranker import DEFAULT_FETCH_K, DEFAULT_FINAL_K, two_stage_retrieve
-from app.rag.retriever import get_vector_store
+from app.rag.hybrid_retriever import DEFAULT_PER_SOURCE_K, hybrid_retrieve
+from app.rag.reranker import DEFAULT_FETCH_K, DEFAULT_FINAL_K
+from app.rag.retriever import get_bm25_store, get_vector_store
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 PROCESSED_PATH = _BACKEND_ROOT / "data" / "processed" / "incidents_clean.csv"
@@ -178,9 +180,13 @@ def main() -> int:
     by_id = {row["ticket_id"]: row for _, row in df.iterrows()}
 
     # Warm up so latencies reflect steady-state (exclude one-time model load).
-    print("Warming up model and vector store…")
+    print("Warming up model, vector store, and BM25 index…")
     get_embedding_model()
     get_vector_store()
+    try:
+        get_bm25_store()
+    except Exception:
+        print("  (BM25 index not available — hybrid retrieval will fall back to FAISS-only)")
     embed_text("warmup")
 
     cases: list[dict] = []
@@ -200,7 +206,7 @@ def main() -> int:
         emb_ms = (time.perf_counter() - t0) * 1000
 
         t0 = time.perf_counter()
-        two_stage_retrieve(query, fetch_k=DEFAULT_FETCH_K, final_k=DEFAULT_FINAL_K)
+        hybrid_retrieve(query, top_k=DEFAULT_FETCH_K)
         ret_ms = (time.perf_counter() - t0) * 1000
 
         t0 = time.perf_counter()
@@ -310,6 +316,8 @@ def main() -> int:
         "config": {
             "embedding_model": settings.embedding_model,
             "groq_model": settings.groq_model,
+            "retrieval_mode": "hybrid (FAISS + BM25 → RRF)",
+            "per_source_k": DEFAULT_PER_SOURCE_K,
             "fetch_k": DEFAULT_FETCH_K,
             "top_k": DEFAULT_FINAL_K,
             "num_cases": len(cases),

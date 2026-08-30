@@ -3,7 +3,7 @@
 
 // Backend base URL is configured via the VITE_API_BASE_URL environment
 // variable. Empty (default) means "use the Vite dev proxy" (same-origin /api).
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://incident-rca-api-thamtf7d5a-uc.a.run.app";
 
 // --- auth token storage ------------------------------------------------------
 const TOKEN_KEY = "rca.auth.token";

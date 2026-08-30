@@ -132,7 +132,7 @@ gcloud run deploy incident-rca-api \
   --cpu 2 \
   --timeout 300 \
   --allow-unauthenticated \
-  --set-env-vars "GROQ_API_KEY=YOUR_KEY,JWT_SECRET=YOUR_RANDOM,CORS_ORIGINS=https://your-app.vercel.app"
+  --set-env-vars "GROQ_API_KEY=YOUR_GROQ_API_KEY,JWT_SECRET=YOUR_JWT_SECRET,CORS_ORIGINS=*"
 ```
 - `--source .` → Cloud Build builds the root Dockerfile automatically.
 - **`--memory 4Gi` is required** — PyTorch OOMs at the 512 MB default.
