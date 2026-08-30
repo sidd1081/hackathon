@@ -156,6 +156,10 @@ def hybrid_retrieve(
         bm25_weight=bm25_weight,
     )
 
+    # Build a ticket_id -> cosine similarity lookup from FAISS results only.
+    # BM25 scores are unbounded and cannot be compared against the 0.45 threshold.
+    faiss_cosine: dict[str, float] = {r.ticket_id: r.score for r in faiss_results}
+
     # Convert to RetrievedIncident (the interface the reranker expects).
     incidents: list[RetrievedIncident] = []
     for rank, (tid, rrf_score, hit) in enumerate(fused[:top_k], start=1):
@@ -169,7 +173,7 @@ def hybrid_retrieve(
                 root_cause=hit.root_cause,
                 resolution_status=hit.resolution_status,
                 resolution_notes=hit.resolution_notes,
-                similarity=rrf_score,  # RRF score as the "similarity" signal
+                similarity=faiss_cosine.get(tid, 0.0),  # cosine sim; 0.0 for BM25-only hits
             )
         )
 
