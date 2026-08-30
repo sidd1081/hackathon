@@ -23,7 +23,15 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/dataset", tags=["dataset"])
 
-_MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB guard
+# Cloud Run hard-rejects any HTTP/1 request body over 32 MiB (33,554,432 bytes)
+# at the platform level, before it reaches this app — that failure has no JSON
+# body and looks like a broken connection to the client. Guard well below that
+# ceiling (leaving headroom for multipart overhead) so uploads that would be
+# platform-rejected instead get this friendly, actionable error message.
+_CLOUD_RUN_MAX_REQUEST_BYTES = 32 * 1024 * 1024
+_CLOUD_RUN_MAX_REQUEST_MB = _CLOUD_RUN_MAX_REQUEST_BYTES // (1024 * 1024)
+_MAX_UPLOAD_BYTES = 31 * 1024 * 1024  # 31 MiB guard
+_MAX_UPLOAD_MB = _MAX_UPLOAD_BYTES // (1024 * 1024)
 
 
 @router.post(
@@ -57,7 +65,11 @@ def upload_dataset(
     if len(contents) > _MAX_UPLOAD_BYTES:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="Uploaded file exceeds the 50 MB limit.",
+            detail=(
+                f"Uploaded file exceeds the {_MAX_UPLOAD_MB} MB upload limit "
+                f"(Cloud Run rejects requests over {_CLOUD_RUN_MAX_REQUEST_MB} MB). "
+                "Split the dataset into smaller batches and upload them separately."
+            ),
         )
 
     logger.info("Received upload '%s' (%d bytes)", filename, len(contents))

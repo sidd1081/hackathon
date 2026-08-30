@@ -61,10 +61,10 @@ npm run dev                   # http://localhost:5173  (proxies /api to the back
 - `POST /api/dataset/upload` — multipart CSV → re-validate, clean, embed, re-index *(auth)*
 - `GET  /api/evaluation` — latest offline benchmark metrics (from `evaluation/results.json`)
 
-Auth uses JWT bearer tokens; passwords are hashed with PBKDF2 (stdlib) in a small
-SQLite store. The public API exposes the technical resolution under the field
-name `resolution` (mapped internally from `resolution_notes`) for a stable
-contract.
+Auth uses JWT bearer tokens; passwords are hashed with PBKDF2 (stdlib) and users
+are stored in **PostgreSQL** (`DATABASE_URL`) — or SQLite locally when unset. The
+public API exposes the technical resolution under the field name `resolution`
+(mapped internally from `resolution_notes`) for a stable contract.
 
 ## Configuration
 

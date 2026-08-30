@@ -78,6 +78,13 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 720  # 12 hours
 
+    # ---- Database (user auth store) ----
+    # SQLAlchemy URL for the user store. Leave unset to use a local SQLite file
+    # (data/auth.db) for dev/demo. In production set DATABASE_URL to Postgres,
+    # e.g. postgresql://user:pass@host:5432/dbname (any postgres:// or
+    # postgresql:// URL is normalized to the psycopg3 driver automatically).
+    database_url: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

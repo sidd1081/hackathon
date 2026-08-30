@@ -26,5 +26,8 @@ python-multipart>=0.0.9
 # Auth: JWT tokens (password hashing uses the stdlib; no bcrypt needed)
 pyjwt>=2.9
 
+# Auth/user store: SQLAlchemy (Postgres in prod via psycopg3, SQLite fallback)
+sqlalchemy>=2.0
+psycopg[binary]>=3.1
 # Hybrid retrieval: BM25 sparse/keyword scoring (Stage 13)
 rank-bm25>=0.2.2
