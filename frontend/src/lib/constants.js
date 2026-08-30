@@ -1,5 +1,12 @@
 export const NOT_DOCUMENTED = "Not explicitly documented.";
 
+// Must match backend/app/api/routes/dataset.py's _MAX_UPLOAD_BYTES. Kept below
+// Cloud Run's hard 32 MB (33,554,432 byte) request-body ceiling so oversized
+// uploads are caught here — with a clear message — instead of failing as an
+// opaque platform-level connection error after the user waits for the upload.
+export const MAX_UPLOAD_BYTES = 31 * 1024 * 1024;
+export const MAX_UPLOAD_MB = MAX_UPLOAD_BYTES / (1024 * 1024);
+
 // Verified example incidents — each retrieves its target ticket at (or near)
 // rank 1 and produces a grounded, cited RCA on the current dataset. They span
 // multiple Apache projects so "Use example" demonstrates cross-project coverage.

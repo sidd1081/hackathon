@@ -60,8 +60,9 @@ curl -X POST http://127.0.0.1:8000/api/incidents/analyze \
 | `GET` | `/api/evaluation` | — | Latest offline benchmark metrics |
 
 Auth uses JWT bearer tokens (HS256); passwords are hashed with PBKDF2-HMAC-SHA256
-(stdlib) and stored in a small SQLite DB at `data/auth.db` (gitignored). Protected
-routes require an `Authorization: Bearer <token>` header.
+(stdlib). Users are stored via SQLAlchemy — **PostgreSQL** when `DATABASE_URL` is
+set (production/compose), otherwise a local SQLite file (`data/auth.db`, dev).
+Protected routes require an `Authorization: Bearer <token>` header.
 
 The public API exposes the technical resolution as `resolution` (mapped from the
 dataset's `resolution_notes`). Jira `resolution_status` is never exposed as a
@@ -78,6 +79,7 @@ vars or `.env`:
 - `GROQ_MAX_RETRIES` (default `6`) — rides out free-tier 429 rate limits
 - `EMBEDDING_MODEL` (default `sentence-transformers/all-MiniLM-L6-v2`)
 - `JWT_SECRET` (**override in production**), `JWT_EXPIRE_MINUTES` (default `720`)
+- `DATABASE_URL` (Postgres, e.g. `postgresql://user:pass@host:5432/db`; unset → SQLite)
 - `LOG_LEVEL`, `CORS_ORIGINS`
 
 ## Scripts

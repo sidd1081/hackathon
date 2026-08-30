@@ -180,6 +180,48 @@ gcloud run deploy "$SERVICE" \
 
 ---
 
+## 5b. Durable users with Postgres
+
+Cloud Run's filesystem is ephemeral, so without a database the SQLite user store
+resets when an instance recycles. Point `DATABASE_URL` at a managed Postgres to
+keep accounts (the app auto-creates the `users` table on start). Any
+`postgres://` / `postgresql://` URL works — it's normalized to the psycopg3
+driver.
+
+**Quickest (free):** create a Postgres on **Supabase** or **Neon**, copy its
+connection string, and add it as a secret:
+
+```bash
+printf '%s' "postgresql://USER:PASS@HOST:5432/DBNAME" \
+  | gcloud secrets create database-url --data-file=-
+
+gcloud secrets add-iam-policy-binding database-url \
+  --member="serviceAccount:${RUNTIME_SA}" --role="roles/secretmanager.secretAccessor"
+
+gcloud run services update "$SERVICE" --region "$REGION" \
+  --set-secrets "DATABASE_URL=database-url:latest"
+```
+
+**Cloud SQL (Postgres) alternative:** create an instance + database, then attach
+it and set the URL:
+
+```bash
+gcloud sql instances create rca-pg --database-version=POSTGRES_16 \
+  --tier=db-f1-micro --region="$REGION"
+gcloud sql databases create rca --instance=rca-pg
+gcloud sql users set-password postgres --instance=rca-pg --password=SET_A_PASSWORD
+
+# Attach over the Cloud SQL socket and point DATABASE_URL at it:
+INSTANCE_CONN=$(gcloud sql instances describe rca-pg --format='value(connectionName)')
+gcloud run services update "$SERVICE" --region "$REGION" \
+  --add-cloudsql-instances "$INSTANCE_CONN" \
+  --set-env-vars "DATABASE_URL=postgresql://postgres:SET_A_PASSWORD@/rca?host=/cloudsql/${INSTANCE_CONN}"
+```
+
+(Cloud SQL's `db-f1-micro` is not free — Supabase/Neon free tiers avoid that.)
+
+---
+
 ## 6. Verify
 
 ```bash
@@ -299,7 +341,7 @@ gcloud run services describe "$SERVICE" --region "$REGION"
 | App crashes / restarts, `Memory limit exceeded` | Raise `--memory 4Gi` (PyTorch needs ~2 GB). |
 | First request very slow, then fast | Cold start pulling the 9 GB image + loading the model. Use `--min-instances 1` for demos. |
 | Browser `CORS` error | `CORS_ORIGINS` must match the frontend origin exactly (scheme + host, no trailing slash). Update via [§7](#7-connect-frontend--backend-cors). |
-| Registered users disappeared | Cloud Run's filesystem is ephemeral; the SQLite auth DB resets on instance recycle. Use Cloud SQL for durable users. |
+| Registered users disappeared | Cloud Run's filesystem is ephemeral. Set `DATABASE_URL` to a managed Postgres (Cloud SQL/Supabase/Neon) so users persist — see [§5b](#5b-durable-users-with-postgres). |
 
 ---
 
@@ -321,4 +363,5 @@ gcloud artifacts repositories delete rca --location="$REGION"        # if you us
   ~1 GB and RAM to ~400 MB, making cold starts fast and unlocking smaller/free
   tiers. See the project README for the embedding layer (`app/rag/embeddings.py`).
 - The FAISS index is baked into the image at build time, so the service starts
-  without rebuilding it; only the auth DB is runtime state (and ephemeral).
+  without rebuilding it. User accounts live in Postgres when `DATABASE_URL` is
+  set (see §5b), otherwise in an ephemeral SQLite file.

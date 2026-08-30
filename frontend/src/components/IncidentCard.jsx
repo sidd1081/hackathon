@@ -1,5 +1,6 @@
 import { Badge } from "./ui/Badge.jsx";
 import { SimilarityMeter } from "./ui/SimilarityMeter.jsx";
+import { Expandable } from "./ui/Expandable.jsx";
 import { NOT_DOCUMENTED } from "../lib/constants.js";
 
 function Field({ label, value }) {
@@ -9,13 +10,11 @@ function Field({ label, value }) {
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
         {label}
       </p>
-      <p
-        className={`mt-0.5 line-clamp-5 break-words text-sm ${
-          muted ? "italic text-slate-400" : "text-slate-700"
-        }`}
-      >
-        {value || "—"}
-      </p>
+      <Expandable
+        text={value}
+        clampClass="line-clamp-5"
+        className={`mt-0.5 text-sm ${muted ? "italic text-slate-400" : "text-slate-700"}`}
+      />
     </div>
   );
 }
@@ -42,9 +41,11 @@ export function IncidentCard({ incident, cited = false }) {
         </div>
       </div>
 
-      <p className="mt-2 line-clamp-3 break-words text-sm text-slate-600">
-        {incident.description}
-      </p>
+      <Expandable
+        text={incident.description}
+        clampClass="line-clamp-3"
+        className="mt-2 text-sm text-slate-600"
+      />
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <Field label="Root cause" value={incident.root_cause} />

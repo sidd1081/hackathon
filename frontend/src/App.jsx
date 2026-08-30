@@ -114,11 +114,6 @@ export default function App() {
           <EvaluationPanel />
         )}
       </main>
-
-      <footer className="mx-auto max-w-6xl px-4 pb-8 pt-2 text-center text-xs text-slate-400 sm:px-6">
-        Evidence-grounded RCA · never fabricates a root cause · API keys stay
-        server-side.
-      </footer>
     </div>
   );
 }

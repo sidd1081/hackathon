@@ -3,20 +3,31 @@ import { Section } from "./ui/Card.jsx";
 import { Button } from "./ui/Button.jsx";
 import { Alert } from "./ui/Alert.jsx";
 import { Badge } from "./ui/Badge.jsx";
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from "../lib/constants.js";
 
 export function DatasetPanel({ state, onUpload }) {
   const inputRef = useRef(null);
   const [fileName, setFileName] = useState("");
+  const [sizeError, setSizeError] = useState("");
   const busy = state.status === "uploading";
 
   const handleChange = (e) => {
     const file = e.target.files?.[0];
     setFileName(file ? file.name : "");
+    if (file && file.size > MAX_UPLOAD_BYTES) {
+      const fileMb = (file.size / (1024 * 1024)).toFixed(1);
+      setSizeError(
+        `"${file.name}" is ${fileMb} MB, which exceeds the ${MAX_UPLOAD_MB} MB upload limit ` +
+          "(the hosting platform rejects larger requests). Split the dataset into smaller batches.",
+      );
+    } else {
+      setSizeError("");
+    }
   };
 
   const handleSubmit = () => {
     const file = inputRef.current?.files?.[0];
-    if (file) onUpload(file);
+    if (file && !sizeError) onUpload(file);
   };
 
   return (
@@ -37,19 +48,27 @@ export function DatasetPanel({ state, onUpload }) {
           <Button
             onClick={handleSubmit}
             loading={busy}
-            disabled={!fileName || busy}
+            disabled={!fileName || busy || Boolean(sizeError)}
           >
             Upload &amp; Index
           </Button>
         </div>
 
-        {state.status === "idle" && (
+        {sizeError && (
+          <Alert variant="error" title="File too large">
+            {sizeError}
+          </Alert>
+        )}
+
+        {state.status === "idle" && !sizeError && (
           <p className="break-words text-sm text-slate-500">
             Required columns:{" "}
             <code className="break-words rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-700">
               ticket_id, project, summary, description, root_cause,
               resolution_status, resolution_notes
             </code>
+            <br />
+            Max file size: {MAX_UPLOAD_MB} MB.
           </p>
         )}
 
