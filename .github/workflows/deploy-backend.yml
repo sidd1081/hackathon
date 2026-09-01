@@ -1,0 +1,41 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "Dockerfile"
+      - "docker-entrypoint.sh"
+      - ".github/workflows/deploy-backend.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure gcloud
+        run: |
+          gcloud config set project rcaasda
+          gcloud config set builds/timeout 1800
+          gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy incident-rca-api \
+            --source . \
+            --region us-central1 \
+            --memory 4Gi \
+            --cpu 2 \
+            --timeout 300 \
+            --allow-unauthenticated \
+            --quiet \
+            --set-env-vars "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }},JWT_SECRET=${{ secrets.JWT_SECRET }},CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}"
