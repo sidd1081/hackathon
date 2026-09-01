@@ -1,11 +1,18 @@
 # Deployment
 
-Two supported ways to deploy:
+Three supported ways to deploy:
 
-- **A. Docker Compose** on a single host (EC2/Lightsail/local) — one command, same-origin.
-- **B. Hugging Face Spaces (backend) + Vercel (frontend)** — free hosting, split
-  origins (see the CORS step). Jump to
-  [that section](#b-hugging-face-spaces-backend--vercel-frontend).
+- **A. Docker Compose** on a single host (EC2/Lightsail/local) — one command, same-origin, Postgres included.
+- **B. Google Cloud Run** — the current live deployment. Backend + frontend each as a separate Cloud Run service, CI/CD via GitHub Actions.
+- **C. Hugging Face Spaces (backend) + Vercel (frontend)** — free hosting, split origins.
+
+---
+
+## Live deployment (Cloud Run)
+
+- **Frontend:** https://incident-rca-frontend-719419392728.us-central1.run.app
+- **Backend:** https://incident-rca-api-thamtf7d5a-uc.a.run.app
+- **GCP project:** `rcaasda` · region `us-central1`
 
 ---
 
@@ -104,7 +111,7 @@ This compose setup runs unchanged on a single VM:
 
 ---
 
-## C. Google Cloud Run (backend)
+## B. Google Cloud Run
 
 Cloud Run runs the backend container, scales to zero when idle (generous free
 tier), and injects a `PORT` the root [Dockerfile](Dockerfile) already respects —
@@ -123,7 +130,19 @@ gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregi
 gcloud config set builds/timeout 1800   # our build (~10 min) exceeds the 600s default
 ```
 
-### Deploy (from source — simplest)
+### Deploy backend
+
+Use the helper script (reads secrets from env vars, never CLI args):
+
+```bash
+export GROQ_API_KEY=<your_groq_api_key>
+export JWT_SECRET=<your_jwt_secret>
+export CORS_ORIGINS=https://incident-rca-frontend-719419392728.us-central1.run.app
+./deploy-cloudrun.sh rcaasda
+```
+
+Or manually:
+
 ```bash
 gcloud run deploy incident-rca-api \
   --source . \
@@ -132,30 +151,73 @@ gcloud run deploy incident-rca-api \
   --cpu 2 \
   --timeout 300 \
   --allow-unauthenticated \
-  --set-env-vars "GROQ_API_KEY=YOUR_GROQ_API_KEY,JWT_SECRET=YOUR_JWT_SECRET,CORS_ORIGINS=*"
+  --set-env-vars "GROQ_API_KEY=<your_groq_api_key>,JWT_SECRET=<your_jwt_secret>,CORS_ORIGINS=<frontend_url>"
 ```
-- `--source .` → Cloud Build builds the root Dockerfile automatically.
-- **`--memory 4Gi` is required** — PyTorch OOMs at the 512 MB default.
-- Returns a URL like `https://incident-rca-api-xxxx-uc.a.run.app`. Verify
-  `…/api/health` → `{"status":"ok"}`, then set your Vercel `VITE_API_BASE_URL`
-  to that URL.
 
-Or just run the helper: `./deploy-cloudrun.sh` (see the script header for env vars).
+### Deploy frontend
+
+```bash
+gcloud run deploy incident-rca-frontend \
+  --source ./frontend \
+  --region us-central1 \
+  --memory 512Mi \
+  --cpu 1 \
+  --timeout 60 \
+  --allow-unauthenticated \
+  --port 8080
+```
+
+The frontend has the backend URL hardcoded as a fallback in
+`frontend/src/services/api.js`. To point it at a different backend, set
+`VITE_API_BASE_URL` in `frontend/.env.production` before building.
+
+### GitHub Actions CI/CD
+
+Automatic deploys are wired in `.github/workflows/`:
+
+- `deploy-backend.yml` — triggers on pushes to `main` that touch `backend/`,
+  `Dockerfile`, or `docker-entrypoint.sh`.
+- `deploy-frontend.yml` — triggers on pushes to `main` that touch `frontend/`.
+
+Required GitHub repository secrets:
+
+| Secret | Value |
+|---|---|
+| `GCP_SA_KEY` | Service account JSON key with `run.admin`, `storage.admin`, `artifactregistry.admin`, `iam.serviceAccountUser` roles |
+| `GROQ_API_KEY` | Your Groq API key |
+| `JWT_SECRET` | Long random string |
+| `CORS_ORIGINS` | Frontend Cloud Run URL |
+
+Create the service account once:
+
+```bash
+gcloud iam service-accounts create github-actions --project rcaasda
+for role in roles/run.admin roles/storage.admin roles/artifactregistry.admin roles/iam.serviceAccountUser; do
+  gcloud projects add-iam-policy-binding rcaasda \
+    --member "serviceAccount:github-actions@rcaasda.iam.gserviceaccount.com" \
+    --role "$role"
+done
+gcloud iam service-accounts keys create /tmp/gha-key.json \
+  --iam-account github-actions@rcaasda.iam.gserviceaccount.com
+# Paste the contents of /tmp/gha-key.json as the GCP_SA_KEY secret
+```
 
 ### Notes
 - **Cold starts:** the image is ~9 GB (PyTorch), so the first request after idle
   pulls the image + loads the model (~30–60 s). Add `--min-instances 1` to keep
   one warm (small cost), or accept the cold start on the free tier.
-- **Durable users:** the FAISS index is baked into the image, but Cloud Run's
-  filesystem is ephemeral — set `DATABASE_URL` to a managed Postgres (Cloud SQL,
-  Supabase, or Neon) so accounts persist. Without it the backend uses SQLite,
-  which resets on instance recycle.
+- **Durable users:** Cloud Run's filesystem is ephemeral — set `DATABASE_URL` to
+  a managed Postgres (Cloud SQL, Supabase, or Neon) so accounts persist across
+  redeploys. Without it the backend uses SQLite which resets on each deploy.
+- **32 MB upload limit:** Cloud Run hard-rejects request bodies over 32 MB at the
+  platform level. The app guards at 31 MB with a clear error message. The bundled
+  dataset (34 MB) must be baked into the image (already done via the Dockerfile).
 - **Better secrets:** for production, store `GROQ_API_KEY`/`JWT_SECRET` in Secret
   Manager and reference them with `--set-secrets` instead of `--set-env-vars`.
 
 ---
 
-## B. Hugging Face Spaces (backend) + Vercel (frontend)
+## C. Hugging Face Spaces (backend) + Vercel (frontend)
 
 Free hosting. The backend runs as a Docker Space (HF free CPU: 2 vCPU / 16 GB,
 enough for PyTorch); the frontend is a static Vercel deploy that calls the Space.
