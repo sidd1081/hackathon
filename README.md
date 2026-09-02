@@ -16,17 +16,20 @@ root cause. If the retrieved evidence doesn't document one, it returns exactly
 
 ```
 CSV → validate → clean → search_text (project+summary+description)
-    → embeddings (MiniLM, 384-d) → FAISS (cosine) + metadata
+    → embeddings (MiniLM, 384-d) → FAISS (cosine) + BM25 (keyword)
                                                     │
-new incident → analyze → retrieve (Top-10) → rerank (Top-5) → evidence check
+new incident → analyze → hybrid retrieve (FAISS+BM25 → RRF → Top-10)
+            → rerank (Top-5) → evidence check
         ┬─ sufficient   → Groq LLM → validate (citation + mechanism) → RCA
         └─ insufficient → "Not explicitly documented."
 ```
 
 - **Backend** ([`backend/`](backend/)) — Python, FastAPI, `uv`. RAG with Sentence
-  Transformers + FAISS + LangChain, orchestrated by a LangGraph workflow, with
-  the LLM served by Groq. The deterministic steps (retrieval, reranking, the
-  evidence gate, and post-generation validation) live outside the LLM.
+  Transformers + FAISS + BM25 (hybrid retrieval via RRF fusion) + LangChain,
+  orchestrated by a LangGraph workflow, with the LLM served by Groq. The
+  deterministic steps (retrieval, reranking, the evidence gate, and
+  post-generation validation) live outside the LLM. Auth uses SQLAlchemy
+  (PostgreSQL in production, SQLite fallback for local dev).
 - **Frontend** ([`frontend/`](frontend/)) — React + Vite + Tailwind CSS. A
   dashboard with an **Analyze** tab (upload dataset · ask query · RCA response ·
   retrieved evidence) and an **Evaluation** tab (benchmark metrics), clearly
@@ -62,9 +65,10 @@ npm run dev                   # http://localhost:5173  (proxies /api to the back
 - `GET  /api/evaluation` — latest offline benchmark metrics (from `evaluation/results.json`)
 
 Auth uses JWT bearer tokens; passwords are hashed with PBKDF2 (stdlib) and users
-are stored in **PostgreSQL** (`DATABASE_URL`) — or SQLite locally when unset. The
-public API exposes the technical resolution under the field name `resolution`
-(mapped internally from `resolution_notes`) for a stable contract.
+are stored in **PostgreSQL** (`DATABASE_URL`) via SQLAlchemy — or SQLite locally
+when `DATABASE_URL` is unset. The public API exposes the technical resolution
+under the field name `resolution` (mapped internally from `resolution_notes`) for
+a stable contract.
 
 ## Configuration
 
@@ -75,6 +79,7 @@ Backend settings (Pydantic) via `backend/.env` — see `backend/.env.example`:
 - `GROQ_MAX_RETRIES` (default `6`) — rides out free-tier 429 rate limits
 - `EMBEDDING_MODEL` (default `sentence-transformers/all-MiniLM-L6-v2`)
 - `JWT_SECRET` (**override in production**) — signs auth tokens
+- `DATABASE_URL` (optional) — SQLAlchemy URL for user store; unset → SQLite
 
 Frontend backend URL via `frontend/.env` → `VITE_API_BASE_URL` (empty uses the
 Vite dev proxy).
@@ -115,8 +120,18 @@ tab. Latest run:
 See [`backend/docs/evaluation.md`](backend/docs/evaluation.md) for metric
 definitions.
 
+## Live deployment
+
+- **Frontend:** https://incident-rca-frontend-719419392728.us-central1.run.app
+- **Backend API:** https://incident-rca-api-thamtf7d5a-uc.a.run.app
+- Both deployed on **Google Cloud Run** (auto-scales to zero).
+- CI/CD via **GitHub Actions** (`.github/workflows/`) — pushes to `main` that
+  touch `backend/` or `frontend/` trigger automatic redeployment.
+
 ## Docs
 
+- [`DEPLOYMENT.md`](DEPLOYMENT.md) — Docker Compose, Cloud Run, and Hugging Face
+  deployment guides.
 - [`PRESENTATION.md`](PRESENTATION.md) — problem, approach, architecture, and
   the evaluator Q&A.
 - [`TEST_CASES.md`](TEST_CASES.md) — verified demo/test queries across all 8
